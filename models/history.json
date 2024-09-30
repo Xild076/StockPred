@@ -1,0 +1,46 @@
+{
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409291535": {
+        "epoch": 2,
+        "train_loss": 246.69974629672956,
+        "val_loss": 52.849323193232216,
+        "lr": 0.001,
+        "accuracy": 50.33333333333333,
+        "loss_weights": {
+            "mse": 1.0,
+            "mae": 1.0,
+            "dir": 5.0
+        },
+        "nickname": "5p Jupiter",
+        "hidden_size": 128,
+        "model_type": "lstm",
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "predict_days": 3,
+        "input_days": 15
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409291543": {
+        "epoch": 17,
+        "train_loss": 69.211355674414,
+        "val_loss": 23.49540736277898,
+        "lr": 0.0005,
+        "accuracy": 57.76388888888889,
+        "loss_weights": {
+            "mse": 1.0,
+            "mae": 1.0,
+            "dir": 5.0
+        },
+        "nickname": "5c Earth",
+        "hidden_size": 128,
+        "model_type": "lstm",
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "predict_days": 3,
+        "input_days": 15
+    }
+}
