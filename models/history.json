@@ -42,5 +42,49 @@
         "attention": true,
         "predict_days": 3,
         "input_days": 15
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409292240": {
+        "nickname": "0m Uranus",
+        "model_type": "lstm",
+        "epoch": 4,
+        "train_loss": 545.6773435804579,
+        "val_loss": 527.130928738912,
+        "lr": 0.001,
+        "accuracy": 49.44444444444444,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1,
+            "mae": 1,
+            "dir": 7.5
+        }
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409301007": {
+        "nickname": "7n Venus",
+        "model_type": "lstm",
+        "epoch": 20,
+        "train_loss": 538.0970477351436,
+        "val_loss": 574.4192136128744,
+        "lr": 0.00025,
+        "accuracy": 49.72222222222222,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1,
+            "mae": 1,
+            "dir": 7.5
+        }
     }
 }
