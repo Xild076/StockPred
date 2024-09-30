@@ -19,6 +19,22 @@ import pickle
 import logging
 import random
 
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*verbose parameter is deprecated.*",
+    category=UserWarning,
+    module="torch.optim.lr_scheduler"
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*You are using `torch.load` with `weights_only=False`.*",
+    category=FutureWarning,
+    module="torch"
+)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 stock_keys = [
@@ -245,8 +261,6 @@ class StockPredictor:
             'Operating Cash Flow', 'Free Cash Flow'
         ]
 
-        self.model_name = model_name if model_name else self._make_model_name()
-
         self.input_days = input_days
         self.predict_days = predict_days
         self.input_size = len(self.features)
@@ -258,6 +272,8 @@ class StockPredictor:
         self.dropout = dropout
         self.attention = attention
         self.model_type = model_type.lower()
+
+        self.model_name = model_name if model_name else self._make_model_name()
 
         self.model = Model(
             model_type=self.model_type,
@@ -278,7 +294,7 @@ class StockPredictor:
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
         
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min', factor=0.5, patience=5, verbose=True, min_lr=1e-6
+            self.optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-6
         )
 
         self.scaler = scaler()
@@ -377,7 +393,11 @@ class StockPredictor:
 
     def train(self, num_epochs, batch_size, validation_split=0.1, accumulate_steps=1, mse_weight=1.0, mae_weight=1.0, dir_weight=5.0):
         self.model.train()
-        self.fit_scalar()
+        if os.path.exists(SCALER_FILE_NAME):
+            with open(SCALER_FILE_NAME, 'rb') as f:
+                self.scaler = pickle.load(f)
+        else:
+            self.fit_scalar()
         all_data = []
         total_iterations = batch_size * num_epochs * 2
         logging.info(f"Collecting training data: {total_iterations} iterations")
