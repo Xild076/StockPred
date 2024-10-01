@@ -102,7 +102,7 @@ class Attention(nn.Module):
         x = self.layer_norm(x + attn_output)
         return x
 
-# LSTM Model
+# LSTM Model with Combined Output
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, 
                  num_layers, output_size, attention=True, 
@@ -125,7 +125,7 @@ class LSTMModel(nn.Module):
 
         self.attention = Attention(hidden_size * self.num_directions) if attention else None
 
-        self.fc_regression = nn.Sequential(
+        self.fc = nn.Sequential(
             nn.Linear(hidden_size * self.num_directions, hidden_size),
             nn.ReLU(),
             nn.Dropout(p=dropout),
@@ -142,10 +142,10 @@ class LSTMModel(nn.Module):
             out = torch.mean(out, dim=1)
         else:
             out = out[:, -1, :]
-        regression_output = self.fc_regression(out)
-        return regression_output
+        output = self.fc(out)
+        return output
 
-# Transformer Model
+# Transformer Model with Combined Output
 class TransformerModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size, num_heads=4, dropout=0.3):
         super(TransformerModel, self).__init__()
@@ -160,7 +160,7 @@ class TransformerModel(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.layer_norm = nn.LayerNorm(hidden_size)
         self.output_size = output_size
-        self.fc_regression = nn.Sequential(
+        self.fc = nn.Sequential(
             nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(p=dropout),
@@ -172,8 +172,8 @@ class TransformerModel(nn.Module):
         x = self.transformer_encoder(x)
         x = self.layer_norm(x)
         x = torch.mean(x, dim=1)
-        regression_output = self.fc_regression(x)
-        return regression_output
+        output = self.fc(x)
+        return output
 
 # Unified Model Class
 class Model(nn.Module):
@@ -226,6 +226,7 @@ class StockDataset(Dataset):
         stock_data = data[stock]
         regression_target = labels[stock][:self.predict_days]
         previous_value = stock_data[-1]['Stock Value']
+        
         feature_values = [
             float(item.get(feature, 0.0)) if self.is_number(item.get(feature, 0)) else 0.0
             for item in stock_data[-self.input_days:]
@@ -257,10 +258,10 @@ class StockPredictor:
         learning_rate=0.001,
         hidden_size=256,
         num_layers=4,
-        num_heads=4,
+        num_heads=8,
         scaler=MinMaxScaler,
         attention=True,
-        dropout=0.5,
+        dropout=0.3,
         bidirectional=True,
         model_name=None,
         use_tqdm=True,
@@ -353,19 +354,23 @@ class StockPredictor:
         return base_name
 
     def _generate_nickname(self, existing_nicknames):
-        adjectives = [
-            "5p", "6p", "9v", "7c", "9x",
-            "9j", "6n", "5f", "5c", "4d",
-            "3e", "8t", "7n", "0m", "1n"
-        ]
-        nouns = [
+        numbers = list('0123456789')
+        letters = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        celestial_objects = [
             "Mercury", "Venus", "Earth", "Mars", "Jupiter",
-            "Saturn", "Uranus", "Neptune"
+            "Saturn", "Uranus", "Neptune", "Orion", "Andromeda",
+            "Pegasus", "Cassiopeia", "Lyra", "Cygnus", "Draco",
+            "Phoenix", "Hydra", "Scorpius", "Taurus", "Gemini",
+            "Perseus", "Sagittarius", "Capricornus", "Aquarius", "Pisces",
+            "Leo", "Virgo", "Cancer", "Libra", "Gemini",
+            "Crux", "Corona", "Hercules", "Monoceros", "Canis Major",
+            "Canis Minor", "Cetus", "Lepus", "Auriga", "Ophiuchus"
         ]
         while True:
-            adjective = random.choice(adjectives)
-            noun = random.choice(nouns)
-            nickname = f"{adjective} {noun}"
+            number = random.choice(numbers)
+            letter = random.choice(letters)
+            celestial_object = random.choice(celestial_objects)
+            nickname = f"{number}{letter} {celestial_object}"
             if nickname not in existing_nicknames:
                 return nickname
 
@@ -416,9 +421,22 @@ class StockPredictor:
             logging.warning(f"Scaler file {SCALER_FILE_NAME} not found. Fitting scaler.")
             self.fit_scaler()
 
-    def custom_loss(self, regression_outputs, regression_targets, direction_outputs, direction_targets, mse_weight, dir_weight):
+    def custom_loss(self, regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight):
         mse_loss = self.criterion_regression(regression_outputs, regression_targets) * mse_weight
-        direction_loss = self.criterion_direction(direction_outputs, direction_targets) * dir_weight
+        # Derive direction from regression outputs
+        previous_values = regression_targets[:, 0].unsqueeze(1)  # Assuming predict_days >=1
+        predicted_directions = (regression_outputs > previous_values).float()
+        direction_loss = self.criterion_direction(predicted_directions, direction_targets) * dir_weight
+        return mse_loss + direction_loss
+    
+    def custom_loss(self, regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight):
+        mse_loss = self.criterion_regression(regression_outputs, regression_targets) * mse_weight
+
+        previous_values = regression_targets[:, 0].unsqueeze(1) 
+        direction_logits = regression_outputs - previous_values 
+
+        direction_loss = self.criterion_direction(direction_logits, direction_targets) * dir_weight
+
         return mse_loss + direction_loss
 
     def train_model(self, num_epochs, batch_size, validation_split=0.1, accumulate_steps=1, mse_weight=1.0, dir_weight=1.0):
@@ -474,26 +492,24 @@ class StockPredictor:
 
                 self.optimizer.zero_grad()
 
-                # Determine the appropriate context manager
-                if self.use_amp:
-                    autocast_context = amp.autocast(device_type=device.type, enabled=self.use_amp)
+                if self.use_amp and device.type == 'cuda':
+                    with amp.autocast(device_type='cuda', enabled=True):
+                        regression_outputs = self.model(inputs_batch)
+                        loss = self.custom_loss(regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight)
+                        loss = loss / accumulate_steps
                 else:
-                    autocast_context = nullcontext()
+                    with nullcontext():
+                        regression_outputs = self.model(inputs_batch)
+                        loss = self.custom_loss(regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight)
+                        loss = loss / accumulate_steps
 
-                with autocast_context:
-                    regression_outputs = self.model(inputs_batch)
-                    # If you have a separate direction head, use it here. Otherwise, you might need to adjust the model.
-                    direction_outputs = regression_outputs  # Placeholder: replace with actual direction output if available
-                    loss = self.custom_loss(regression_outputs, regression_targets, direction_outputs, direction_targets, mse_weight, dir_weight)
-                    loss = loss / accumulate_steps
-
-                if self.use_amp:
+                if self.use_amp and device.type == 'cuda':
                     self.scaler_amp.scale(loss).backward()
                 else:
                     loss.backward()
 
                 if (i + 1) % accumulate_steps == 0:
-                    if self.use_amp:
+                    if self.use_amp and device.type == 'cuda':
                         self.scaler_amp.unscale_(self.optimizer)
                         nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                         self.scaler_amp.step(self.optimizer)
@@ -518,10 +534,6 @@ class StockPredictor:
             self.scheduler.step(val_loss)
             current_lr = self.optimizer.param_groups[0]['lr']
 
-            print(f'Train Loss: {avg_train_loss:.6f}')
-            print(f'Val Loss: {val_loss:.6f}')
-            print(f'Accuracy: {accuracy:.6f}')
-            print(f'LR: {current_lr:.6f}')
 
             self.epochs.append(epoch + 1)
 
@@ -554,16 +566,14 @@ class StockPredictor:
                 regression_targets = regression_targets.to(device)
                 direction_targets = direction_targets.to(device)
 
-                # Determine the appropriate context manager
-                if self.use_amp:
-                    autocast_context = amp.autocast(device_type=device.type, enabled=self.use_amp)
+                if self.use_amp and device.type == 'cuda':
+                    with amp.autocast(device_type='cuda', enabled=True):
+                        regression_outputs = self.model(inputs_batch)
+                        loss = self.custom_loss(regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight)
                 else:
-                    autocast_context = nullcontext()
-
-                with autocast_context:
-                    regression_outputs = self.model(inputs_batch)
-                    direction_outputs = regression_outputs  # Placeholder: replace with actual direction output if available
-                    loss = self.custom_loss(regression_outputs, regression_targets, direction_outputs, direction_targets, mse_weight, dir_weight)
+                    with nullcontext():
+                        regression_outputs = self.model(inputs_batch)
+                        loss = self.custom_loss(regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight)
 
                 total_loss += loss.item()
 
@@ -636,10 +646,14 @@ class StockPredictor:
                     tensor_data = torch.tensor(scaled_data, dtype=torch.float32).to(device)
                     tensor_data = self.add_noise(tensor_data).unsqueeze(0)
                     regression_output = self.model(tensor_data).squeeze(0).cpu().numpy()
+                    
                     previous_value = stock_data[-1]['Stock Value']
                     actual_values = labels[stock][:self.predict_days]
+                    
+                    # Determine direction from regression output
                     predicted_directions = (regression_output > previous_value).astype(float)
                     actual_directions = (actual_values > previous_value).astype(float)
+                    
                     correct_directions += (predicted_directions == actual_directions).sum()
                     total += len(predicted_directions)
                     mae += np.mean(np.abs(regression_output - actual_values))
@@ -744,23 +758,27 @@ class StockPredictor:
         plt.show()
 
     def _create_nickname(self, existing_nicknames):
-        number_letters = [
-            "5p", "6p", "9v", "7c", "9x",
-            "9j", "6n", "5f", "5c", "4d",
-            "3e", "8t", "7n", "0m", "1n"
-        ]
+        numbers = list('0123456789')
+        letters = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
         celestial_objects = [
             "Mercury", "Venus", "Earth", "Mars", "Jupiter",
-            "Saturn", "Uranus", "Neptune"
+            "Saturn", "Uranus", "Neptune", "Orion", "Andromeda",
+            "Pegasus", "Cassiopeia", "Lyra", "Cygnus", "Draco",
+            "Phoenix", "Hydra", "Scorpius", "Taurus", "Gemini",
+            "Perseus", "Sagittarius", "Capricornus", "Aquarius", "Pisces",
+            "Leo", "Virgo", "Cancer", "Libra", "Gemini",
+            "Crux", "Corona", "Hercules", "Monoceros", "Canis Major",
+            "Canis Minor", "Cetus", "Lepus", "Auriga", "Ophiuchus"
         ]
         
         max_attempts = 1000 
         attempts = 0
         
         while attempts < max_attempts:
-            number_letter = random.choice(number_letters)
+            number = random.choice(numbers)
+            letter = random.choice(letters)
             celestial_object = random.choice(celestial_objects)
-            nickname = f"{number_letter} {celestial_object}"
+            nickname = f"{number}{letter} {celestial_object}"
             if nickname not in existing_nicknames:
                 return nickname
             attempts += 1
@@ -768,6 +786,5 @@ class StockPredictor:
         raise ValueError("Unable to generate a unique nickname after multiple attempts.")
 
     def _generate_nickname(self):
-
         existing_nicknames = [data.get('nickname', '') for data in history.values()]
         return self._create_nickname(existing_nicknames)
