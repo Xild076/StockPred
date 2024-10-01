@@ -171,5 +171,47 @@
             "mse": 1.0,
             "dir": 1.0
         }
+    },
+    "Lstm_Layers4_Hidden256_Input15_Predict3_202409302036": {
+        "nickname": "8U Gemini",
+        "model_type": "lstm",
+        "epoch": 3,
+        "train_loss": 59.01727955429642,
+        "val_loss": 59.1045177936554,
+        "accuracy": 50.81944444444444,
+        "lr": 0.001,
+        "hidden_size": 256,
+        "num_layers": 4,
+        "num_heads": 8,
+        "dropout": 0.3,
+        "bidirectional": true,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1.0,
+            "dir": 1.0
+        }
+    },
+    "Lstm_Layers4_Hidden256_Input15_Predict3_202409302111": {
+        "nickname": "0O Auriga",
+        "model_type": "lstm",
+        "epoch": 3,
+        "train_loss": 58.031744932245324,
+        "val_loss": 57.18161738713582,
+        "accuracy": 49.73611111111111,
+        "lr": 0.001,
+        "hidden_size": 256,
+        "num_layers": 4,
+        "num_heads": 8,
+        "dropout": 0.3,
+        "bidirectional": true,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1.0,
+            "dir": 1.0
+        }
     }
 }
