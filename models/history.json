@@ -22,10 +22,10 @@
         "input_days": 15
     },
     "Lstm_Layers2_Hidden128_Input15_Predict3_202409291543": {
-        "epoch": 17,
+        "epoch": 21,
         "train_loss": 69.211355674414,
         "val_loss": 23.49540736277898,
-        "lr": 0.0005,
+        "lr": 0.00025,
         "accuracy": 57.76388888888889,
         "loss_weights": {
             "mse": 1.0,
@@ -85,6 +85,91 @@
             "mse": 1,
             "mae": 1,
             "dir": 7.5
+        }
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409301149": {
+        "nickname": "3e Jupiter",
+        "model_type": "lstm",
+        "epoch": 3,
+        "train_loss": 406.8727847793956,
+        "val_loss": 397.1472517649333,
+        "lr": 0.001,
+        "accuracy": 49.51388888888889,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1.0,
+            "mae": 1.0,
+            "dir": 5.0
+        }
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409301238": {
+        "nickname": "4d Earth",
+        "model_type": "lstm",
+        "epoch": 2,
+        "train_loss": 404.1428376186041,
+        "val_loss": 384.7164806789822,
+        "lr": 0.001,
+        "accuracy": 49.44444444444444,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1.0,
+            "mae": 1.0,
+            "dir": 5.0
+        }
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409301631": {
+        "nickname": "4d Neptune",
+        "model_type": "lstm",
+        "epoch": 14,
+        "train_loss": 93.56730244483477,
+        "val_loss": 95.29678715599908,
+        "lr": 0.0005,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1.0,
+            "dir": 1.0
+        }
+    },
+    "Lstm_Layers2_Hidden128_Input15_Predict3_202409301639": {
+        "nickname": "7n Earth",
+        "model_type": "lstm",
+        "epoch": 10,
+        "train_loss": 94.5880711502499,
+        "val_loss": 93.20263756116232,
+        "accuracy": 53.888888888888886,
+        "lr": 0.001,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 4,
+        "dropout": 0.5,
+        "bidirectional": false,
+        "attention": true,
+        "input_days": 15,
+        "predict_days": 3,
+        "loss_weights": {
+            "mse": 1.0,
+            "dir": 1.0
         }
     }
 }

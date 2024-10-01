@@ -27,8 +27,7 @@ model = StockPredictor(
         use_tqdm=True,
         input_days=15,
         predict_days=3,
-        model_name='Lstm_Layers2_Hidden128_Input15_Predict3_202409301007'
 )
 
 if __name__ == '__main__':
-    model.train(15, 64, 0.1, 1, 1, 1, 7.5)
+    model.train_model(50, 64)
