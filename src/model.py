@@ -423,14 +423,6 @@ class StockPredictor:
 
     def custom_loss(self, regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight):
         mse_loss = self.criterion_regression(regression_outputs, regression_targets) * mse_weight
-        # Derive direction from regression outputs
-        previous_values = regression_targets[:, 0].unsqueeze(1)  # Assuming predict_days >=1
-        predicted_directions = (regression_outputs > previous_values).float()
-        direction_loss = self.criterion_direction(predicted_directions, direction_targets) * dir_weight
-        return mse_loss + direction_loss
-    
-    def custom_loss(self, regression_outputs, regression_targets, direction_targets, mse_weight, dir_weight):
-        mse_loss = self.criterion_regression(regression_outputs, regression_targets) * mse_weight
 
         previous_values = regression_targets[:, 0].unsqueeze(1) 
         direction_logits = regression_outputs - previous_values 
@@ -615,13 +607,29 @@ class StockPredictor:
     def load_model(self):
         model_path = os.path.join(MODEL_DIR, f"{self.model_name}.pt")
         if os.path.exists(model_path):
-            checkpoint = torch.load(model_path, map_location=device)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-            self.load_scaler()
-            self.model_data = checkpoint.get('model_data', read_history(self.model_name))
-            logging.info(f"Model loaded from {model_path}")
+            try:
+                checkpoint = torch.load(model_path, map_location=device)
+                # Load state_dict with strict=False to allow mismatches
+                self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                self.load_scaler()
+                self.model_data = checkpoint.get('model_data', read_history(self.model_name))
+                logging.info(f"Model loaded from {model_path}")
+            except RuntimeError as e:
+                logging.error(f"RuntimeError while loading the model: {e}")
+                logging.error("Attempting to load with strict=False...")
+                # Attempt to load with strict=False
+                try:
+                    self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+                    self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                    self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                    self.load_scaler()
+                    self.model_data = checkpoint.get('model_data', read_history(self.model_name))
+                    logging.info(f"Model loaded with partial state_dict from {model_path}")
+                except Exception as ex:
+                    logging.error(f"Failed to load model with strict=False: {ex}")
+                    raise ex
         else:
             logging.error(f"No model found at {model_path}")
 
@@ -788,3 +796,4 @@ class StockPredictor:
     def _generate_nickname(self):
         existing_nicknames = [data.get('nickname', '') for data in history.values()]
         return self._create_nickname(existing_nicknames)
+

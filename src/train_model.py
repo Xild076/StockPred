@@ -17,25 +17,17 @@ if __name__ == "__main__":
         model_type='lstm',               # 'transformer' or 'lstm'
         stock_list=stock_keys,    # Select relevant stocks
         learning_rate=0.001,                    # Common starting point
-        hidden_size=256,                        # Balanced capacity
+        hidden_size=128,                        # Balanced capacity
         num_layers=4,                           # Sufficient depth
         num_heads=8,                            # Enhanced attention
         scaler=MinMaxScaler,                    # Feature scaling
-        attention=True,                         # Enable attention mechanism
+        attention=False,                         # Enable attention mechanism
         dropout=0.3,                            # Regularization
         bidirectional=False,                     # For LSTM
         use_tqdm=True,                          # Progress bars
         input_days=15,                          # Look-back period
         predict_days=3,                         # Prediction horizon
-        early_stopping_patience=10              # Early stopping
+        early_stopping_patience=10,              # Early stopping
     )
 
-    # Train the model
-    predictor.train_model(
-        num_epochs=50,                          # Number of epochs
-        batch_size=64,                          # Batch size
-        validation_split=0.1,                   # 10% validation
-        accumulate_steps=2,                     # Gradient accumulation
-        mse_weight=1.0,                         # Regression loss weight
-        dir_weight=5.0                        # Direction loss weight
-    )
+    predictor.train_model(50, 64)
