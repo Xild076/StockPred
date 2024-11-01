@@ -303,13 +303,13 @@ class FetchStock:
             FetchStock.download_individual_stock_data(code, date_range)
 
     @staticmethod
-    def fetch_stock_data(code, day):
+    def fetch_stock_data(code, day, retries=0):
         file_path = os.path.join(FetchStock.SAVE_PATH, code.upper() + '.csv')
+        date_dt = datetime.strptime(day, '%Y-%m-%d')
+        collection_start_date = (date_dt - timedelta(days=500)).strftime('%Y-%m-%d')
+        collection_date_range = [collection_start_date, day]
         if not os.path.exists(file_path):
             print(f"{file_path} not found. Downloading data...")
-            date_dt = datetime.strptime(day, '%Y-%m-%d')
-            collection_start_date = (date_dt - timedelta(days=500)).strftime('%Y-%m-%d')
-            collection_date_range = [collection_start_date, day]
             try:
                 FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
             except Exception as e:
@@ -321,11 +321,13 @@ class FetchStock:
         try:
             data = pd.read_csv(file_path, index_col=0, parse_dates=True)
             day_data = data.loc[day]
-            print(day_data)
             return day_data.to_dict()
         except KeyError:
-            print(f"Date {day} not found in data for {code}. Data may not be available for this date.")
-            return {}
+            if retries == 1:
+                return {}
+            FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
+            print(f"Date {day} not found in data for {code}. Data may not be available for this date. Downloading it once more.")
+            return FetchStock.fetch_stock_data(code, day, 1)
         except Exception as e:
             print(f"Failed to read {file_path}: {e}")
             return {}
@@ -579,7 +581,7 @@ class FetchSentiment:
             if retries > 0:
                 return 0
             FetchSentiment.download_stock_sentiment([code], date_range=[start_date, end_date])
-            FetchSentiment.fetch_sentiment_data(code, day, back_up_days, retries=1)
+            return FetchSentiment.fetch_sentiment_data(code, day, back_up_days, retries=1)
         else:
             try:
                 data = pd.read_csv(file_path, parse_dates=['date'])
@@ -592,7 +594,7 @@ class FetchSentiment:
                 if retries > 0:
                     return 0
                 FetchSentiment.download_stock_sentiment([code], date_range=[start_date, end_date])
-                FetchSentiment.fetch_sentiment_data(code, day, back_up_days, retries=1)
+                return FetchSentiment.fetch_sentiment_data(code, day, back_up_days, retries=1)
         try:
             data = pd.read_csv(file_path, parse_dates=['date'])
             data.set_index('date', inplace=True)
