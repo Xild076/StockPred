@@ -12,7 +12,6 @@ from tqdm import tqdm
 from bs4 import BeautifulSoup
 import requests
 from newspaper import Article
-import logging
 from dateutil.relativedelta import relativedelta
 import random
 
