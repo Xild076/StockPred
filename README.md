@@ -135,7 +135,6 @@ Ensure you have the following installed on your system:
 
 If requirements.txt is not provided, install the following packages:
 
-    ```bash
     pip install streamlit pandas numpy yfinance altair torch torchvision scikit-learn matplotlib tqdm beautifulsoup4 requests newspaper3k textblob colorama pandas_datareader
 
 
@@ -220,7 +219,6 @@ Each model is defined in model_blocks.py and can be trained and evaluated indepe
 
 To train a specific model, instantiate the StockPredictor with desired parameters and call the train method. Example:
 
-    ```bash
     predictor = StockPredictor(
         model_type='lstm',
         stock_list=['AAPL', 'GOOG'],
@@ -235,7 +233,6 @@ To train a specific model, instantiate the StockPredictor with desired parameter
 
 To generate predictions for a specific stock and date:
 
-    ```bash
     predictions = predictor.predict(ticker='AAPL', date='2024-10-28')
     print(predictions)
 
