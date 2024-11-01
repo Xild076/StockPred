@@ -326,8 +326,9 @@ class FetchStock:
             if retries == 1:
                 return {}
             FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
-            print(f"Date {day} not found in data for {code}. Data may not be available for this date. Downloading it once more.")
-            return FetchStock.fetch_stock_data(code, day, 1)
+            data = FetchStock.fetch_stock_data(code, day, 1)
+            print(data)
+            return data
         except Exception as e:
             print(f"Failed to read {file_path}: {e}")
             return {}
