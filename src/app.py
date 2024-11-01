@@ -442,4 +442,5 @@ For contributing guidelines, please contact the author or submit a pull request 
 
 ---"""
 
-st.markdown(readme)
+with st.expander("README - Project Documentation", expanded=False):
+    st.markdown(readme)
