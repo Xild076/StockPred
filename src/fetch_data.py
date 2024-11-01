@@ -327,7 +327,6 @@ class FetchStock:
                 return {}
             FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
             data = FetchStock.fetch_stock_data(code, day, 1)
-            print(data)
             return data
         except Exception as e:
             print(f"Failed to read {file_path}: {e}")
