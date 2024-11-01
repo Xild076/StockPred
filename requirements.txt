@@ -1,5 +1,6 @@
 streamlit
 pandas
+lxml
 numpy
 altair
 yfinance
