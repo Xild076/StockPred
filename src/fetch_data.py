@@ -321,6 +321,7 @@ class FetchStock:
         try:
             data = pd.read_csv(file_path, index_col=0, parse_dates=True)
             day_data = data.loc[day]
+            print(day_data)
             return day_data.to_dict()
         except KeyError:
             print(f"Date {day} not found in data for {code}. Data may not be available for this date.")
