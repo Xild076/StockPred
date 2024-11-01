@@ -1,10 +1,6 @@
 streamlit
 pandas
 numpy
-datetime
-json
-os
-time
 altair
 yfinance
 torch
@@ -15,9 +11,5 @@ tqdm
 bs4
 requests
 newspaper3k
-logging
-dateutil
-random
-pickle
 scikit-learn
 matplotlib
