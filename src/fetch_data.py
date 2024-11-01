@@ -107,6 +107,26 @@ class FetchFred:
         else:
             raise ValueError(f"Data for the day {day} is not available.")
 
+import os
+import time
+import json
+import tempfile
+import shutil
+from datetime import datetime, timedelta
+from collections import deque
+import pandas as pd
+import pandas_datareader.data as web
+import yfinance as yf
+from textblob import TextBlob
+from tqdm import tqdm
+from bs4 import BeautifulSoup
+import requests
+from newspaper import Article
+from dateutil.relativedelta import relativedelta
+import random
+import io
+from typing import List
+
 class FetchStock:
     SAVE_PATH = 'data/Stocks/'
     DATE_RANGE = ['2016-01-01', '2024-09-29']
@@ -308,6 +328,26 @@ class FetchStock:
         except Exception as e:
             print(f"Failed to read {file_path}: {e}")
             return {}
+
+    @staticmethod
+    def create_csv_files(tickers: List[str]):
+        columns = ['Open', 'High', 'Low', 'Close', 'Volume'] + FetchStock.income_statement_features + FetchStock.balance_sheet_features + FetchStock.cash_flow_features + FetchStock.company_info_features
+        for ticker in tickers:
+            file_path = os.path.join(FetchStock.SAVE_PATH, f"{ticker.upper()}.csv")
+            if not os.path.exists(file_path):
+                df = pd.DataFrame(columns=columns)
+                df.to_csv(file_path)
+
+    @staticmethod
+    def get_all_tickers() -> List[str]:
+        url = 'https://datahub.io/core/s-and-p-500-companies/r/constituents.csv'
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            df = pd.read_csv(io.StringIO(response.text))
+            return df['Symbol'].tolist()
+        except Exception:
+            return []
 
 class FetchSentiment:
     SAVE_PATH = 'data/Sentiment/sentiment.csv'
