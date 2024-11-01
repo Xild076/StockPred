@@ -22,7 +22,7 @@ from utility import Logging
 from torch.amp import autocast, GradScaler
 from fetch_data import FetchStock, FetchFred, FetchSentiment
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 log = Logging('log.txt')
 
 SCALER_FILE_NAME = 'models/scaler.pkl'
