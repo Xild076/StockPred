@@ -137,14 +137,12 @@ If requirements.txt is not provided, install the following packages:
 
     ```bash
     pip install streamlit pandas numpy yfinance altair torch torchvision scikit-learn matplotlib tqdm beautifulsoup4 requests newspaper3k textblob colorama pandas_datareader
-    ```
 
 
 4.	**Download NLTK Data (Required for TextBlob)**
 
     ```bash
     python -m textblob.download_corpora
-    ```
 
 ## Usage
 
@@ -154,13 +152,11 @@ Running the Streamlit App
 
     ```bash
     cd stock-price-predictor
-    ```
 
 2.	**Run the Streamlit App**
 
     ```bash
     streamlit run app.py
-    ```
 
 
 3.	**Interact with the App**
@@ -181,7 +177,6 @@ Before training, ensure that the necessary data is available in the data/ direct
 
     ```bash
     python model.py
-    ```
 
 This script initializes a StockPredictor instance and performs training using the specified model parameters.
 
@@ -235,7 +230,6 @@ To train a specific model, instantiate the StockPredictor with desired parameter
         hidden_size=128
     )
     predictor.train(num_epochs=50, batch_size=64, lr_scheduler='rltop')
-    ```
 
 ## Model Prediction
 
@@ -244,7 +238,6 @@ To generate predictions for a specific stock and date:
     ```bash
     predictions = predictor.predict(ticker='AAPL', date='2024-10-28')
     print(predictions)
-    ```
 
 ## Contributing
 
