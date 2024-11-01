@@ -1,7 +1,5 @@
 # Stock Price Predictor
 
-![Stock Price Predictor](https://img.shields.io/badge/License-MIT-blue.svg)
-
 ## Table of Contents
 
 - [Overview](#overview)
