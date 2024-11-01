@@ -13,3 +13,4 @@ requests
 newspaper3k
 scikit-learn
 matplotlib
+ta

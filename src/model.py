@@ -280,7 +280,7 @@ class StockPredictor:
             loss = self.criterion(output, targets)
         return output, loss
 
-    def train(self, num_epochs: int, batch_size: int, lr_scheduler:Literal['rltop', 'cawr']):
+    def train(self, num_epochs: int, batch_size: int, lr_scheduler: Literal['rltop', 'cawr']):
         log.log('Training started.')
         self.prep_data(batch_size)
         steps_per_epoch = len(self.train_loader)
@@ -457,9 +457,8 @@ class StockPredictor:
         }
         return prediction_dict
 
-
 if __name__ == '__main__':
-    model_type = 'transformer'
+    model_type = 'lstm'
     stock_list = ticker_symbols
     input_days = 15
     output_days = 3
@@ -469,10 +468,9 @@ if __name__ == '__main__':
         stock_list=stock_list,
         input_days=input_days,
         output_days=output_days,
+        model_name='LSTM_HS128_I15O3_202410220855'
     )
-    predictor.train(100, 64, 'rltop')
-    predictor.test_model()
-    ticker = 'AAPL'
+    ticker = 'COST'
     date = '2024-10-28'
     predictions = predictor.predict(ticker, date)
     if predictions is not None:

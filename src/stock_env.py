@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from torch.utils.data import Dataset
 import os
 import numpy as np
-import ta
 import warnings
 import torch
 
@@ -70,10 +69,6 @@ class StockDataset(Dataset):
         return data
 
     def add_technical_indicators(self, data):
-        if 'MACD' in self.technical_indicators:
-            data['MACD'] = ta.trend.macd(data['Close'])
-        if 'RSI' in self.technical_indicators:
-            data['RSI'] = ta.momentum.RSIIndicator(data['Close']).rsi()
         data.ffill(inplace=True)
         data.bfill(inplace=True)
         return data

@@ -17,31 +17,31 @@ from dateutil.relativedelta import relativedelta
 import random
 
 ticker_symbols = [
-        "AAPL",
-        "MSFT",
-        "GOOG",
-        "AMZN",
-        "TSLA",
-        "NFLX",
-        "META",
-        "NVDA",
-        "V",
-        "JPM",
-        "JNJ",
-        "XOM",
-        "DIS",
-        "BABA",
-        "KO",
-        "PG",
-        "PFE",
-        "PEP",
-        "CSCO",
-        "ORCL",
-        "BA",
-        "INTC",
-        "WMT",
-        "VZ"
-    ]
+    "AAPL",
+    "MSFT",
+    "GOOG",
+    "AMZN",
+    "TSLA",
+    "NFLX",
+    "META",
+    "NVDA",
+    "V",
+    "JPM",
+    "JNJ",
+    "XOM",
+    "DIS",
+    "BABA",
+    "KO",
+    "PG",
+    "PFE",
+    "PEP",
+    "CSCO",
+    "ORCL",
+    "BA",
+    "INTC",
+    "WMT",
+    "VZ"
+]
 date_range = ['2020-01-01', '2024-09-01']
 
 class FetchFred:
@@ -62,7 +62,6 @@ class FetchFred:
         os.makedirs(FetchFred.SAVE_PATH, exist_ok=True)
         start_date, end_date = date_range
         file_path = os.path.join(FetchFred.SAVE_PATH, 'fred_data.csv')
-        
         new_data = web.get_data_fred(codes, start=start_date, end=end_date)
         new_data = new_data.reindex(pd.date_range(start=start_date, end=end_date, freq='D'))
         new_data.ffill(inplace=True)
@@ -72,7 +71,6 @@ class FetchFred:
         if not set(codes).issubset(new_data.columns):
             missing = set(codes) - set(new_data.columns)
             raise ValueError(f"Missing FRED codes in data: {missing}")
-
         if os.path.exists(file_path):
             existing_data = pd.read_csv(file_path, index_col=0, parse_dates=True)
             combined_data = pd.concat([existing_data, new_data])
@@ -90,7 +88,6 @@ class FetchFred:
         if not os.path.exists(file_path):
             FetchFred.download_fred_data(FetchFred.FRED_CODES, FetchFred.DATE_RANGE)
         data = pd.read_csv(file_path, index_col=0, parse_dates=True)
-
         day_dt = pd.to_datetime(day)
         if day_dt not in data.index:
             min_date = data.index.min()
@@ -106,12 +103,10 @@ class FetchFred:
                 new_end_date = day
             FetchFred.download_fred_data(FetchFred.FRED_CODES, [new_start_date, new_end_date])
             data = pd.read_csv(file_path, index_col=0, parse_dates=True)
-
         if day_dt in data.index:
             return data.loc[day_dt].to_dict()
         else:
             raise ValueError(f"Data for the day {day} is not available.")
-
 
 class FetchStock:
     SAVE_PATH = 'data/Stocks/'
@@ -230,30 +225,25 @@ class FetchStock:
         'trailingPegRatio'
     ]
 
+    @staticmethod
     def download_individual_stock_data(code, date_range):
         os.makedirs(FetchStock.SAVE_PATH, exist_ok=True)
         try:
             stock = yf.Ticker(code)
-
             hist = stock.history(start=date_range[0], end=date_range[1])
+            if hist.empty:
+                raise ValueError(f"No historical data available for {code} in the given date range.")
             full_date_range = pd.date_range(start=date_range[0], end=date_range[1])
-
             hist.index = hist.index.tz_localize(None).normalize()
             hist = hist.reindex(full_date_range)
-
             hist[['Open', 'High', 'Low', 'Close', 'Volume']] = hist[['Open', 'High', 'Low', 'Close', 'Volume']].fillna(method='ffill').fillna(method='bfill')
-
             financials = stock.financials.transpose()
             financials.index = financials.index.tz_localize(None).normalize()
-
             balance_sheet = stock.balance_sheet.transpose()
             balance_sheet.index = balance_sheet.index.tz_localize(None).normalize()
-
             cashflow = stock.cashflow.transpose()
             cashflow.index = cashflow.index.tz_localize(None).normalize()
-
             info = stock.info
-
             company_features = {k: v for k, v in info.items() if k in FetchStock.company_info_features}
             company_features_df = pd.DataFrame([company_features], index=pd.to_datetime([date_range[0]]))
 
@@ -267,9 +257,7 @@ class FetchStock:
             financials = reindex_fill(financials, FetchStock.income_statement_features)
             balance_sheet = reindex_fill(balance_sheet, FetchStock.balance_sheet_features)
             cashflow = reindex_fill(cashflow, FetchStock.cash_flow_features)
-
             company_features_df = reindex_fill(company_features_df, FetchStock.company_info_features)
-
             full_data = pd.concat([
                 hist[['Open', 'High', 'Low', 'Close', 'Volume']],
                 financials,
@@ -277,29 +265,25 @@ class FetchStock:
                 cashflow,
                 company_features_df
             ], axis=1)
-
             if not full_data.index.is_unique:
                 print(f"Warning: Duplicate dates found for {code}. Dropping duplicates.")
                 full_data = full_data[~full_data.index.duplicated(keep='first')]
-
             full_data = full_data.ffill().bfill()
-
             full_data.index = full_data.index.strftime('%Y-%m-%d')
-
             file_path = os.path.join(FetchStock.SAVE_PATH, f"{code.upper()}.csv")
-            if not os.path.exists(file_path):
-                with open(file_path, 'w') as file:
-                    file.close()
             full_data.to_csv(file_path)
             print(f"Data saved to {file_path}")
         except Exception as e:
             print(f"Failed to download data for {code}: {e}")
+            raise
 
+    @staticmethod
     def download_stock_data(codes, date_range):
         for code in codes:
             print(f"Downloading data for {code}...")
             FetchStock.download_individual_stock_data(code, date_range)
 
+    @staticmethod
     def fetch_stock_data(code, day):
         file_path = os.path.join(FetchStock.SAVE_PATH, code.upper() + '.csv')
         if not os.path.exists(file_path):
@@ -307,27 +291,24 @@ class FetchStock:
             date_dt = datetime.strptime(day, '%Y-%m-%d')
             collection_start_date = (date_dt - timedelta(days=500)).strftime('%Y-%m-%d')
             collection_date_range = [collection_start_date, day]
-            FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
+            try:
+                FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
+            except Exception as e:
+                print(f"Failed to download data for {code}: {e}")
+                return {}
+            if not os.path.exists(file_path):
+                print(f"Failed to download data for {code}. File {file_path} still not found.")
+                return {}
         try:
             data = pd.read_csv(file_path, index_col=0, parse_dates=True)
+            day_data = data.loc[day]
+            return day_data.to_dict()
+        except KeyError:
+            print(f"Date {day} not found in data for {code}. Data may not be available for this date.")
+            return {}
         except Exception as e:
             print(f"Failed to read {file_path}: {e}")
             return {}
-            
-        try:
-            day_data = data.loc[day]
-        except KeyError:
-            print(f"Date {day} not found in data for {code}. Rerunning.")
-            file_path = os.path.join(FetchStock.SAVE_PATH, code.upper() + '.csv')
-            date_dt = datetime.strptime(day, '%Y-%m-%d')
-            collection_start_date = (date_dt - timedelta(days=500)).strftime('%Y-%m-%d')
-            collection_date_range = [collection_start_date, day]
-            FetchStock.download_individual_stock_data(code, date_range=collection_date_range)
-            FetchStock.fetch_stock_data(code, day)
-            return {}
-        
-        return day_data.to_dict()
-
 
 class FetchSentiment:
     SAVE_PATH = 'data/Sentiment/sentiment.csv'
@@ -554,7 +535,6 @@ class FetchSentiment:
         date_dt = datetime.strptime(day, '%Y-%m-%d')
         start_date = (date_dt - timedelta(days=back_up_days)).strftime('%Y-%m-%d')
         end_date = (date_dt + timedelta(days=1)).strftime('%Y-%m-%d')
-
         if not os.path.exists(file_path):
             if retries > 0:
                 return 0
@@ -566,7 +546,6 @@ class FetchSentiment:
             except Exception as e:
                 print(f"Error reading sentiment CSV: {e}")
                 data = pd.DataFrame()
-
             date_range = pd.date_range(start=start_date, end=end_date)
             missing_dates = set(date_range.strftime('%Y-%m-%d')) - set(data['date'].astype(str))
             if code not in data.columns or missing_dates:
@@ -574,7 +553,6 @@ class FetchSentiment:
                     return 0
                 FetchSentiment.download_stock_sentiment([code], date_range=[start_date, end_date])
                 FetchSentiment.fetch_sentiment_data(code, day, back_up_days, retries=1)
-
         try:
             data = pd.read_csv(file_path, parse_dates=['date'])
             data.set_index('date', inplace=True)
@@ -582,16 +560,13 @@ class FetchSentiment:
         except Exception as e:
             print(f"Error reading sentiment CSV after download: {e}")
             return 0
-
         date_range = pd.date_range(start=start_date, end=end_date)
         ticker_data = data.get(code)
         if ticker_data is None:
             print(f"No sentiment data available for ticker {code}")
             return 0
-
         ticker_data = ticker_data.reindex(date_range)
         ticker_data = ticker_data.ffill().bfill()
-
         data_updated = pd.DataFrame({code: ticker_data}, index=date_range)
         data_updated.reset_index(inplace=True)
         data_updated.rename(columns={'index': 'date'}, inplace=True)
@@ -600,12 +575,9 @@ class FetchSentiment:
         data_combined.set_index('date', inplace=True)
         data_combined.sort_index(inplace=True)
         data_combined.to_csv(file_path)
-
         try:
             sentiment_value = ticker_data.loc[date_dt]
             return sentiment_value
         except KeyError:
             print(f"Sentiment data not available for {code} on {day}")
             return 0
-
-
