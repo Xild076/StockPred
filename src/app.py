@@ -442,4 +442,4 @@ For contributing guidelines, please contact the author or submit a pull request 
 
 ---"""
 
-st.write(readme)
+st.markdown(readme)
