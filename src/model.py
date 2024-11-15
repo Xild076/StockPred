@@ -21,6 +21,7 @@ from utility import Logging
 
 from torch.amp import autocast, GradScaler
 from fetch_data import FetchStock, FetchFred, FetchSentiment
+import time
 
 device = torch.device("cpu")
 log = Logging('log.txt')
@@ -288,7 +289,7 @@ class StockPredictor:
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer=self.optimizer,
                 mode='min',
-                factor=0.001,
+                factor=0.0001,
                 patience=3
             )
         elif lr_scheduler == 'cawr':
@@ -470,8 +471,4 @@ if __name__ == '__main__':
         output_days=output_days,
         model_name='LSTM_HS128_I15O3_202410220855'
     )
-    ticker = 'COST'
-    date = '2024-10-28'
-    predictions = predictor.predict(ticker, date)
-    if predictions is not None:
-        print(f"Predicted stock prices for {ticker} on {date}: {predictions}")
+    predictor.train(100, 64, 'rltop')

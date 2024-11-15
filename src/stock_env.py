@@ -3,8 +3,10 @@ from datetime import datetime, timedelta
 from torch.utils.data import Dataset
 import os
 import numpy as np
+from fetch_data import FetchFred, FetchSentiment, FetchStock
 import warnings
 import torch
+import time
 
 warnings.filterwarnings("ignore")
 
@@ -32,7 +34,7 @@ class StockDataset(Dataset):
         'GDP', 'INDPRO', 'TCU', 'DGORDER', 'UNRATE', 'PAYEMS',
         'CIVPART', 'AWHMAN', 'LNS11300060', 'HOUST', 'Sentiment'
     ]
-    DATE_RANGE = ['2020-01-01', '2024-09-01']
+    DATE_RANGE = ['2020-01-01', '2024-11-05']
 
     def __init__(
         self,
@@ -60,10 +62,13 @@ class StockDataset(Dataset):
 
     def load_stock_data(self, stock):
         file_path = os.path.join('data/Stocks', f"{stock.upper()}.csv")
+        if not os.path.exists(file_path):
+            FetchStock.download_individual_stock_data(stock, StockDataset.DATE_RANGE)
         data = pd.read_csv(file_path, index_col=0, parse_dates=True)
         data = data.reindex(pd.date_range(start=self.day_range[0], end=self.day_range[1], freq='D'))
         data.ffill(inplace=True)
         data.bfill(inplace=True)
+        data.fillna(0)
         if self.technical_indicators:
             data = self.add_technical_indicators(data)
         return data
@@ -71,6 +76,7 @@ class StockDataset(Dataset):
     def add_technical_indicators(self, data):
         data.ffill(inplace=True)
         data.bfill(inplace=True)
+        data.fillna(0)
         return data
 
     def load_fred_data(self):
@@ -78,6 +84,7 @@ class StockDataset(Dataset):
         data = pd.read_csv(file_path, index_col=0, parse_dates=True)
         data.ffill(inplace=True)
         data.bfill(inplace=True)
+        data.fillna(0)
         return data
 
     def load_sentiment_data(self):
@@ -85,6 +92,7 @@ class StockDataset(Dataset):
         data = pd.read_csv(file_path, index_col=0, parse_dates=True)
         data.ffill(inplace=True)
         data.bfill(inplace=True)
+        data.fillna(0)
         return data
 
     def set_scaler(self, scaler, label_scaler):
@@ -139,7 +147,7 @@ class StockDataset(Dataset):
         stock_df = self.stock_data[stock]
         days_index = pd.DatetimeIndex(days)
         data = stock_df.reindex(days_index)
-        data = data.ffill().bfill()
+        data = data.ffill().bfill().fillna(0)
         data = data.to_dict('records')
         return data
 
@@ -147,7 +155,7 @@ class StockDataset(Dataset):
         fred_df = self.fred_data
         days_index = pd.DatetimeIndex(days)
         data = fred_df.reindex(days_index)
-        data = data.ffill().bfill()
+        data = data.ffill().bfill().fillna(0)
         data = data.to_dict('records')
         return data
 
@@ -155,7 +163,7 @@ class StockDataset(Dataset):
         sentiment_df = self.sentiment_data
         days_index = pd.DatetimeIndex(days)
         data = sentiment_df.reindex(days_index)
-        data = data.ffill().bfill()
+        data = data.ffill().bfill().fillna(0)
         data = data.to_dict('records')
         return data
 

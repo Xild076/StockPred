@@ -623,3 +623,11 @@ class FetchSentiment:
         except KeyError:
             print(f"Sentiment data not available for {code} on {day}")
             return 0
+
+
+def fill_missing_values(file_path):
+    df = pd.read_csv(file_path)
+    df = df.bfill().ffill().fillna(0)
+    df.to_csv(file_path, index=False)
+
+
