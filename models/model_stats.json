@@ -8,9 +8,9 @@
         "hidden_size": 128,
         "training_date_range": [
             "2020-01-01",
-            "2024-09-01"
+            "2024-11-05"
         ],
-        "epoch": 214,
+        "epoch": 315,
         "best_train_loss": 0.0015126303446399997,
         "best_val_loss": 0.0020318016088367585
     },
