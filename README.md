@@ -2,6 +2,16 @@
 
 StockPred presents a novel approach at predicting stock prices. It implements a lightweight architecture inspired by LLMs to achieve surprisingly high accuracy.
 ---
+### Rationale
+Why use an LLM inspired architecture?
+
+The story is a bit long, but in short, I was watching a youtube video on how LLMs work, then thought that some parts of the LLM process like attention and the fact that you can input outputs back in to continously predict caught my interest, and I thought that it would be applicable to this project, something I was already working on. Turns out, it worked out much better than I thought it would.
+### Architecture
+**Model:**
+Ticker Embedding -> Input Projection -> Positional Embedding -> Transformer Encoder -> Output Head MLP
+**Data:**
+- yfinance for finance data
+- FRED for interest rate, GDP, inflation, unemployment, and volitility
 ### Efficiency
 The model is only has about 2M parameters, making it very efficient and runnable on low-end GPUs and high-end CPUs. This makes it one of the most accessible stock prediction models out there, especially given its accuracy.
 ### Accuracy
