@@ -22,6 +22,7 @@ except (ImportError, ValueError):
 
 st.set_page_config(layout="wide")
 st.title("Universal Stock Trend Forecaster")
+st.markdown("**PLEASE UNDER NO CIRCUMSTANCES USE THIS FOR REAL MONEY TRADING. THIS IS FOR EDUCATIONAL AND FUN PURPOSES ONLY. ALSO NOTE THAT EVEN THOUGH SOME OF THE METRICS ARE GOOD, THE BAD ONES ARE DISASTERIOUSLY BAD. THIS MODEL HAS GOOD RELIABILITY OVERALL, BUT WHEN THINGS GO WRONG, THEY REALLY GO WRONG. Beyond that, have fun :D.**")
 
 @st.cache_resource
 def load_model_manager():
