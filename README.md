@@ -1,4 +1,5 @@
 # StockPred — A novel approach at predicting stock prices
+
 StockPred presents a novel approach at predicting stock prices. It implements a lightweight architecture inspired by LLMs to achieve surprisingly high accuracy.
 ---
 ### Efficiency
