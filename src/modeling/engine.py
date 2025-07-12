@@ -274,8 +274,8 @@ class UniversalModelEngine:
             self.model.train()
             total_train_loss = 0
             batch_count = 0
-            
-            for seq, target, ids in tqdm(self.train_loader, desc=f"Epoch {epoch+1}"):
+
+            for seq, target, ids in tqdm(self.train_loader, desc=f"Epoch {epoch+1}", disable=True):
                 optimizer.zero_grad()
                 output = self.model(seq, ids)
                 loss = criterion(output, target)
