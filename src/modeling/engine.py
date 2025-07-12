@@ -249,7 +249,7 @@ class UniversalModelEngine:
         print("Starting training...")
         self.prepare_data()
         
-        criterion = nn.MSELoss()
+        criterion = AsymmetricMSELoss(alpha=0.6)
         optimizer = torch.optim.Adam(
             self.model.parameters(), 
             lr=config.TRAIN_CONFIG['learning_rate'],
