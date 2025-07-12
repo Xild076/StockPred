@@ -28,37 +28,60 @@ st.markdown("**PLEASE UNDER NO CIRCUMSTANCES USE THIS FOR REAL MONEY TRADING. TH
 def load_model_manager():
     return ModelManager()
 
+@st.cache_data
+def load_data():
+    return pd.read_parquet(config.DATA_PATH)
+
 @st.cache_resource
-def load_engine_with_model(model_path, scaler_path, model_config, feature_cols, tickers):
+def load_engine_with_model(model_path, scaler_path, metadata):
     try:
-        data = pd.read_parquet(config.DATA_PATH)
+        model_config = metadata.get('model_config', config.MODEL_CONFIG)
+        feature_cols = metadata.get('feature_columns', config.TECHNICAL_FEATURES + config.TIME_FEATURES + config.MACRO_FEATURES)
+        tickers = metadata.get('tickers', config.TICKERS)
+        
+        if not feature_cols:
+            feature_cols = config.TECHNICAL_FEATURES + config.TIME_FEATURES + config.MACRO_FEATURES
+        if not tickers:
+            tickers = config.TICKERS
+        
+        data = load_data()
         engine = UniversalModelEngine(data, model_config=model_config)
+        
+        supported_params = {
+            'd_model', 'n_heads', 'n_layers', 'dropout', 'ticker_embedding_dim',
+            'sequence_length', 'prediction_horizon'
+        }
+        filtered_config = {k: v for k, v in model_config.items() if k in supported_params}
         
         engine.model = UniversalTransformerModel(
             input_dim=len(feature_cols),
             ticker_count=len(tickers),
-            d_model=model_config['d_model'],
-            n_heads=model_config['n_heads'],
-            n_layers=model_config['n_layers'],
-            dropout=model_config['dropout'],
-            ticker_embedding_dim=model_config['ticker_embedding_dim'],
-            sequence_length=model_config['sequence_length'],
-            prediction_horizon=model_config['prediction_horizon']
+            **filtered_config
         ).to(engine.device)
 
-        state_dict = torch.load(model_path, map_location=engine.device)
-        
-        if 'model_state_dict' in state_dict:
-            state_dict = state_dict['model_state_dict']
+        if os.path.exists(model_path):
+            state_dict = torch.load(model_path, map_location=engine.device, weights_only=False)
+            
+            if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                state_dict = state_dict['model_state_dict']
 
-        engine.model.load_state_dict(state_dict, strict=False)
-        engine.scaler = joblib.load(scaler_path)
+            engine.model.load_state_dict(state_dict, strict=False)
+        else:
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        
+        if os.path.exists(scaler_path):
+            engine.scaler = joblib.load(scaler_path)
+        else:
+            raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
+        
         engine.feature_cols = feature_cols
         engine.tickers = tickers
         engine.ticker_map = {ticker: i for i, ticker in enumerate(tickers)}
+        
         return engine
+        
     except Exception as e:
-        st.error("model not loading")
+        st.error(f"Failed to load model: {str(e)}")
         return None
 
 model_manager = load_model_manager()
@@ -72,7 +95,7 @@ st.sidebar.header("Model Selection")
 model_options = {}
 for model in saved_models:
     metadata = model['metadata']
-    val_loss = metadata.get('best_val_loss')
+    val_loss = metadata.get('best_val_loss') or metadata.get('final_val_loss')
     if val_loss is not None:
         label = f"{model['name']} (Val Loss: {val_loss:.4f})"
     else:
@@ -88,30 +111,41 @@ st.sidebar.write(f"**Created:** {metadata.get('created_at', 'Unknown')}")
 st.sidebar.write(f"**Training Time:** {metadata.get('training_time', 'Unknown')}")
 st.sidebar.write(f"**Epochs:** {metadata.get('epochs_trained', 'Unknown')}")
 st.sidebar.write(f"**Device:** {metadata.get('device', 'Unknown')}")
+st.sidebar.write(f"**Model Type:** {metadata.get('model_type', 'Unknown')}")
 
 accuracy_metrics = metadata.get('accuracy_metrics', {})
 if accuracy_metrics:
     st.sidebar.write("**Accuracy Metrics:**")
     for metric, value in accuracy_metrics.items():
-        st.sidebar.write(f"&nbsp;&nbsp;&nbsp;**{metric.replace('_', ' ').title()}:** {value:.4f}")
+        if isinstance(value, (int, float)):
+            if 'accuracy' in metric.lower():
+                st.sidebar.write(f"&nbsp;&nbsp;&nbsp;**{metric.replace('_', ' ').title()}:** {value:.2%}")
+            else:
+                st.sidebar.write(f"&nbsp;&nbsp;&nbsp;**{metric.replace('_', ' ').title()}:** {value:.4f}")
+        else:
+            st.sidebar.write(f"&nbsp;&nbsp;&nbsp;**{metric.replace('_', ' ').title()}:** {value}")
 
-model_config_loaded = metadata.get('model_config', config.MODEL_CONFIG)
-feature_cols_loaded = metadata.get('feature_columns', [])
-tickers_loaded = metadata.get('tickers', [])
-
-model_path, scaler_path = model_manager.load_model_for_prediction(selected_model['path'])
-engine = load_engine_with_model(model_path, scaler_path, model_config_loaded, feature_cols_loaded, tickers_loaded)
+try:
+    model_path, scaler_path, model_metadata = model_manager.load_model_for_prediction(selected_model['path'])
+    engine = load_engine_with_model(model_path, scaler_path, model_metadata)
+except Exception as e:
+    st.error(f"Failed to load model: {str(e)}")
+    st.stop()
 
 if engine:
+    tickers_loaded = engine.tickers
+    model_config_loaded = metadata.get('model_config', config.MODEL_CONFIG)
+    
     ticker = st.selectbox("Select a Ticker", tickers_loaded)
     
     if ticker:
-        horizon = st.slider("Select Prediction Horizon (days)", 1, 30, model_config_loaded['prediction_horizon'])
+        max_horizon = model_config_loaded.get('prediction_horizon', 5)
+        horizon = st.slider("Select Prediction Horizon (days)", 1, 30, max_horizon)
 
         if st.button("Generate Forecast"):
             try:
                 with st.spinner("Generating forecast..."):
-                    predictions_df = engine.predict(ticker, horizon)
+                    predictions_df = engine.predict(ticker, horizon, model_path, scaler_path)
                     
                     hist_data = yf.Ticker(ticker).history(period="60d")
                     if hist_data.empty:
@@ -119,7 +153,13 @@ if engine:
                          st.stop()
                     last_close_price = hist_data['Close'].iloc[-1]
 
-                    predicted_log_returns = predictions_df[config.TARGET_FEATURE]
+                    target_col = metadata.get('target_feature', config.TARGET_FEATURE)
+                    if target_col in predictions_df.columns:
+                        predicted_log_returns = predictions_df[target_col]
+                    else:
+                        st.error(f"Target feature '{target_col}' not found in predictions")
+                        st.stop()
+                    
                     predicted_prices = []
                     current_price = last_close_price
                     for log_return in predicted_log_returns:
@@ -162,3 +202,5 @@ if engine:
             except Exception as e:
                 st.error(f"An error occurred during prediction or plotting: {e}")
                 st.exception(e)
+else:
+    st.error("Failed to load the selected model. Please check the model files and try again.")

@@ -29,7 +29,11 @@ class AsymmetricMSELoss(nn.Module):
 
     def forward(self, y_pred, y_true):
         diff = y_pred - y_true
-        loss = torch.mean(F.relu(diff)**2 * self.alpha + F.relu(-diff)**2 * (1 - self.alpha))
+        pos_diff = F.relu(diff)
+        neg_diff = F.relu(-diff)
+        
+        loss = torch.mean(torch.log(torch.cosh(pos_diff)) * self.alpha + 
+                         torch.log(torch.cosh(neg_diff)) * (1 - self.alpha))
         return loss
 
 class UniversalModelEngine:
@@ -55,19 +59,28 @@ class UniversalModelEngine:
             sequence_length=current_model_config['sequence_length'],
             prediction_horizon=current_model_config['prediction_horizon']
         ).to(self.device)
-        self.model_path = os.path.join(config.MODELS_PATH, 'universal_model.pth')
-        self.scaler_path = os.path.join(config.MODELS_PATH, 'universal_scaler.pkl')
+        self.temp_model_path = os.path.join(config.MODELS_PATH, 'temp_model.pth')
+        self.temp_scaler_path = os.path.join(config.MODELS_PATH, 'temp_scaler.pkl')
         self.checkpoint_path = config.CHECKPOINT_PATH
 
     def _create_sequences(self, data, ticker_ids):
-        sequences, targets, ids = [], [], []
         seq_len = config.MODEL_CONFIG['sequence_length']
         pred_hor = config.MODEL_CONFIG['prediction_horizon']
-        for i in range(len(data) - seq_len - pred_hor + 1):
-            sequences.append(data[i:i + seq_len])
-            targets.append(data[i + seq_len:i + seq_len + pred_hor])
-            ids.append(ticker_ids[i])
-        return np.array(sequences), np.array(targets), np.array(ids)
+        n_sequences = len(data) - seq_len - pred_hor + 1
+        
+        if n_sequences <= 0:
+            return np.array([]), np.array([]), np.array([])
+        
+        sequences = np.empty((n_sequences, seq_len, data.shape[1]), dtype=np.float32)
+        targets = np.empty((n_sequences, pred_hor, data.shape[1]), dtype=np.float32)
+        ids = np.empty(n_sequences, dtype=np.int64)
+        
+        for i in range(n_sequences):
+            sequences[i] = data[i:i + seq_len]
+            targets[i] = data[i + seq_len:i + seq_len + pred_hor]
+            ids[i] = ticker_ids[i]
+        
+        return sequences, targets, ids
 
     def prepare_data(self):
         print("Preparing data...")
@@ -75,74 +88,110 @@ class UniversalModelEngine:
         from sklearn.preprocessing import StandardScaler
         self.scaler = StandardScaler()
         
-        if os.path.exists(self.scaler_path):
-            self.scaler = joblib.load(self.scaler_path)
+        if os.path.exists(self.temp_scaler_path):
+            self.scaler = joblib.load(self.temp_scaler_path)
             data_scaled = self.scaler.transform(self.data[self.feature_cols])
         else:
             data_scaled = self.scaler.fit_transform(self.data[self.feature_cols])
-            joblib.dump(self.scaler, self.scaler_path)
         
-        self.data[self.feature_cols] = data_scaled
+        self.data.loc[:, self.feature_cols] = data_scaled
         
-        all_sequences, all_targets, all_ids = [], [], []
+        total_sequences = 0
+        for ticker in self.tickers:
+            ticker_data = self.data[self.data['ticker'] == ticker]
+            seq_len = config.MODEL_CONFIG['sequence_length']
+            pred_hor = config.MODEL_CONFIG['prediction_horizon']
+            n_seq = len(ticker_data) - seq_len - pred_hor + 1
+            if n_seq > 0:
+                total_sequences += n_seq
         
+        if total_sequences == 0:
+            raise ValueError("No valid sequences can be created from the data")
+        
+        X = np.empty((total_sequences, seq_len, len(self.feature_cols)), dtype=np.float32)
+        y = np.empty((total_sequences, pred_hor, len(self.feature_cols)), dtype=np.float32)
+        ids = np.empty(total_sequences, dtype=np.int64)
+        
+        idx = 0
         for ticker in self.tickers:
             ticker_data = self.data[self.data['ticker'] == ticker]
             ticker_id_val = self.ticker_map[ticker]
             ticker_features = ticker_data[self.feature_cols].values
-            ticker_ids_array = np.full(len(ticker_features), ticker_id_val)
+            ticker_ids_array = np.full(len(ticker_features), ticker_id_val, dtype=np.int64)
             
-            sequences, targets, ids = self._create_sequences(ticker_features, ticker_ids_array)
+            sequences, targets, seq_ids = self._create_sequences(ticker_features, ticker_ids_array)
             if len(sequences) > 0:
-                all_sequences.append(sequences)
-                all_targets.append(targets)
-                all_ids.append(ids)
+                end_idx = idx + len(sequences)
+                X[idx:end_idx] = sequences
+                y[idx:end_idx] = targets
+                ids[idx:end_idx] = seq_ids
+                idx = end_idx
         
-        X = np.concatenate(all_sequences)
-        y = np.concatenate(all_targets)
-        ids = np.concatenate(all_ids)
+        X = X[:idx]
+        y = y[:idx]
+        ids = ids[:idx]
         
         indices = np.random.permutation(len(X))
         X, y, ids = X[indices], y[indices], ids[indices]
         
-        total_samples = len(X)
-        val_size = int(total_samples * config.TRAIN_CONFIG['val_split_ratio'])
-        train_size = total_samples - val_size
-        
-        X_train, X_val = X[:train_size], X[train_size:]
-        y_train, y_val = y[:train_size], y[train_size:]
-        ids_train, ids_val = ids[:train_size], ids[train_size:]
+        val_size = int(len(X) * config.TRAIN_CONFIG['val_split_ratio'])
+        train_size = len(X) - val_size
         
         train_data = TensorDataset(
-            torch.FloatTensor(X_train), 
-            torch.FloatTensor(y_train), 
-            torch.LongTensor(ids_train)
+            torch.from_numpy(X[:train_size]).to(self.device, dtype=torch.float32), 
+            torch.from_numpy(y[:train_size]).to(self.device, dtype=torch.float32), 
+            torch.from_numpy(ids[:train_size]).to(self.device, dtype=torch.long)
         )
         val_data = TensorDataset(
-            torch.FloatTensor(X_val), 
-            torch.FloatTensor(y_val), 
-            torch.LongTensor(ids_val)
+            torch.from_numpy(X[train_size:]).to(self.device, dtype=torch.float32), 
+            torch.from_numpy(y[train_size:]).to(self.device, dtype=torch.float32), 
+            torch.from_numpy(ids[train_size:]).to(self.device, dtype=torch.long)
         )
         
-        self.train_loader = DataLoader(train_data, batch_size=config.TRAIN_CONFIG['batch_size'], shuffle=True)
-        self.val_loader = DataLoader(val_data, batch_size=config.TRAIN_CONFIG['batch_size'], shuffle=False)
+        self.train_loader = DataLoader(
+            train_data, 
+            batch_size=config.TRAIN_CONFIG['batch_size'], 
+            shuffle=True, 
+            pin_memory=False,
+            num_workers=0
+        )
+        self.val_loader = DataLoader(
+            val_data, 
+            batch_size=config.TRAIN_CONFIG['batch_size'], 
+            shuffle=False, 
+            pin_memory=False,
+            num_workers=0
+        )
         
-        print(f"Data prepared: {len(X_train)} train, {len(X_val)} val samples")
+        print(f"Data prepared: {train_size} train, {val_size} val samples")
 
     def _save_checkpoint(self, epoch, optimizer, scheduler, val_loss, is_best=False):
         if epoch % config.TRAIN_CONFIG['checkpoint_every'] == 0 or is_best:
-            state = {
-                'epoch': epoch,
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_loss': val_loss,
-                'scaler_state': self.scaler
-            }
-            if scheduler is not None:
-                state['scheduler_state_dict'] = scheduler.state_dict()
-            torch.save(state, self.checkpoint_path)
-            if is_best:
-                torch.save(state, self.model_path.replace('.pth', '_best.pth'))
+            try:
+                state = {
+                    'epoch': epoch,
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
+                    'val_loss': val_loss,
+                    'scaler_state': self.scaler,
+                    'feature_cols': self.feature_cols,
+                    'tickers': list(self.tickers),
+                    'ticker_map': self.ticker_map,
+                    'model_config': config.MODEL_CONFIG,
+                    'timestamp': datetime.datetime.now().isoformat(),
+                    'scheduler_step': scheduler.last_epoch if scheduler else 0
+                }
+                
+                os.makedirs(os.path.dirname(self.checkpoint_path), exist_ok=True)
+                torch.save(state, self.checkpoint_path)
+                
+                if is_best:
+                    best_path = self.temp_model_path.replace('.pth', '_best.pth')
+                    torch.save(state, best_path)
+                    
+            except Exception as e:
+                print(f"Warning: Failed to save checkpoint: {e}")
 
     def _load_checkpoint(self, optimizer, scheduler):
         if os.path.exists(self.checkpoint_path):
@@ -151,16 +200,23 @@ class UniversalModelEngine:
                 from sklearn.preprocessing import StandardScaler
                 torch.serialization.add_safe_globals([StandardScaler])
                 checkpoint = torch.load(self.checkpoint_path, map_location=self.device, weights_only=False)
+                
                 self.model.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-                if scheduler is not None and 'scheduler_state_dict' in checkpoint:
+                
+                if scheduler and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict']:
                     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                    scheduler.last_epoch = checkpoint.get('scheduler_step', 0)
+                
                 start_epoch = checkpoint['epoch'] + 1
                 best_val_loss = checkpoint.get('val_loss', float('inf'))
+                
                 if 'scaler_state' in checkpoint:
                     self.scaler = checkpoint['scaler_state']
+                
                 print(f"Resuming from epoch {start_epoch}, best val loss: {best_val_loss:.6f}")
                 return start_epoch, best_val_loss
+                
             except Exception as e:
                 print(f"Error loading checkpoint: {e}")
                 return 0, float('inf')
@@ -171,70 +227,80 @@ class UniversalModelEngine:
     def train(self):
         if not os.path.exists(config.MODELS_PATH):
             os.makedirs(config.MODELS_PATH)
+        if not os.path.exists(config.SAVED_MODELS_PATH):
+            os.makedirs(config.SAVED_MODELS_PATH)
         
         self.training_start_time = time.time()
         print("Starting training...")
         self.prepare_data()
         
         criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=config.TRAIN_CONFIG['learning_rate'])
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), 
+            lr=config.TRAIN_CONFIG['learning_rate'],
+            weight_decay=config.TRAIN_CONFIG['weight_decay']
+        )
+        
+        start_epoch, best_val_loss = self._load_checkpoint(optimizer, None)
+        
+        total_steps = len(self.train_loader) * (config.TRAIN_CONFIG['epochs'] - start_epoch)
         
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
-            max_lr=config.TRAIN_CONFIG['max_lr'],  # Use configured max_lr
-            steps_per_epoch=len(self.train_loader),
-            epochs=config.TRAIN_CONFIG['epochs'],
-            pct_start=config.TRAIN_CONFIG['warmup_epochs'] / config.TRAIN_CONFIG['epochs'],  # Dynamic warmup
+            max_lr=config.TRAIN_CONFIG['max_lr'],
+            total_steps=total_steps,
+            pct_start=config.TRAIN_CONFIG['warmup_epochs'] / config.TRAIN_CONFIG['epochs'],
             anneal_strategy='cos',
-            cycle_momentum=False
+            cycle_momentum=False,
+            div_factor=10.0,
+            final_div_factor=100.0
         )
         
-        start_epoch, best_val_loss = self._load_checkpoint(optimizer, scheduler)
+        if start_epoch > 0:
+            for _ in range(start_epoch * len(self.train_loader)):
+                if scheduler.last_epoch < total_steps - 1:
+                    scheduler.step()
         
         print(f"Training on {config.DEVICE} device")
         print(f"Starting from epoch {start_epoch}")
+        print(f"Total steps: {total_steps}, Steps per epoch: {len(self.train_loader)}")
         
         patience_counter = 0
         loss_history = []
-        grad_norm_history = []
+        grad_norm_sum = 0
         epoch = start_epoch
         
         for epoch in tqdm(range(start_epoch, config.TRAIN_CONFIG['epochs']), desc="Training Progress"):
             self.model.train()
             total_train_loss = 0
-            epoch_grad_norms = []
+            batch_count = 0
             
             for seq, target, ids in tqdm(self.train_loader, desc=f"Epoch {epoch+1}"):
-                seq = seq.to(self.device)
-                target = target.to(self.device)
-                ids = ids.to(self.device)
-                
                 optimizer.zero_grad()
                 output = self.model(seq, ids)
                 loss = criterion(output, target)
                 loss.backward()
                 
                 total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.TRAIN_CONFIG['gradient_clip_val'])
-                epoch_grad_norms.append(total_norm.item())
+                grad_norm_sum += total_norm.item()
+                batch_count += 1
                 
                 optimizer.step()
-                scheduler.step()
+                if scheduler.last_epoch < total_steps - 1:
+                    scheduler.step()
                 
                 total_train_loss += loss.item()
             
             avg_train_loss = total_train_loss / len(self.train_loader)
-            avg_grad_norm = sum(epoch_grad_norms) / len(epoch_grad_norms)
+            avg_grad_norm = grad_norm_sum / batch_count if batch_count > 0 else 0
+            grad_norm_sum = 0
             
-            loss_history.append(avg_train_loss)
-            grad_norm_history.append(avg_grad_norm)
-            
-            if len(loss_history) > 20:
+            if len(loss_history) >= 20:
                 loss_history.pop(0)
-                grad_norm_history.pop(0)
+            loss_history.append(avg_train_loss)
             
             current_lr = optimizer.param_groups[0]['lr']
             
-            # Check for training instability
             if avg_grad_norm > 5.0 or avg_train_loss > 100.0:
                 print(f"Training instability detected! Grad norm: {avg_grad_norm:.2f}, Loss: {avg_train_loss:.2f}")
                 print("Reducing learning rate and continuing...")
@@ -242,7 +308,6 @@ class UniversalModelEngine:
                     param_group['lr'] *= 0.5
                 continue
             
-            # Check for loss explosion
             if len(loss_history) > 5:
                 recent_losses = loss_history[-5:]
                 if all(loss > recent_losses[0] * 2 for loss in recent_losses[1:]):
@@ -256,10 +321,6 @@ class UniversalModelEngine:
             
             with torch.no_grad():
                 for seq, target, ids in self.val_loader:
-                    seq = seq.to(self.device)
-                    target = target.to(self.device)
-                    ids = ids.to(self.device)
-                    
                     output = self.model(seq, ids)
                     loss = criterion(output, target)
                     total_val_loss += loss.item()
@@ -270,8 +331,8 @@ class UniversalModelEngine:
             if is_best:
                 best_val_loss = avg_val_loss
                 patience_counter = 0
-                torch.save(self.model.state_dict(), self.model_path)
-                joblib.dump(self.scaler, self.scaler_path)
+                torch.save(self.model.state_dict(), self.temp_model_path)
+                joblib.dump(self.scaler, self.temp_scaler_path)
                 print(f"New best model saved! Val Loss: {avg_val_loss:.6f}")
             else:
                 patience_counter += 1
@@ -298,52 +359,79 @@ class UniversalModelEngine:
         return model_folder
 
     def _save_completed_model(self, best_val_loss, epochs_trained, training_time):
+        try:
+            data = pd.read_parquet(config.DATA_PATH)
+            current_tickers = data['ticker'].unique().tolist()
+        except:
+            current_tickers = list(self.tickers)
+        
         metadata = {
             'created_at': datetime.datetime.now().isoformat(),
             'model_type': 'UniversalTransformerModel',
+            'model_architecture': 'UniversalTransformerModel',
             'best_val_loss': float(best_val_loss),
-            'epochs_trained': epochs_trained + 1,
+            'final_val_loss': float(best_val_loss),
+            'epochs_trained': int(epochs_trained + 1),
             'training_time': f"{training_time:.2f}s",
-            'device': config.DEVICE,
-            'model_config': config.MODEL_CONFIG,
-            'train_config': config.TRAIN_CONFIG,
+            'device': str(config.DEVICE),
+            'model_config': dict(config.MODEL_CONFIG),
+            'train_config': dict(config.TRAIN_CONFIG),
             'feature_count': len(self.feature_cols),
-            'ticker_count': len(self.tickers),
-            'tickers': list(self.tickers),
-            'feature_columns': self.feature_cols,
-            'accuracy_metrics': {}
+            'ticker_count': len(current_tickers),
+            'tickers': current_tickers,
+            'feature_columns': list(self.feature_cols),
+            'target_feature': config.TARGET_FEATURE,
+            'accuracy_metrics': {},
+            'data_path': config.DATA_PATH,
+            'version': '1.0'
         }
         
-        model_folder = self.model_manager.save_completed_model(self.model_path, self.scaler_path, metadata)
+        model_folder = self.model_manager.save_completed_model(self.temp_model_path, self.temp_scaler_path, metadata)
+        
+        if os.path.exists(self.temp_model_path):
+            os.remove(self.temp_model_path)
+        if os.path.exists(self.temp_scaler_path):
+            os.remove(self.temp_scaler_path)
+            
         return model_folder
 
-    def predict(self, ticker, horizon):
-        if not os.path.exists(self.model_path) or not os.path.exists(self.scaler_path):
-            raise FileNotFoundError("Trained model or scaler not found. Please train the model first.")
+    def predict(self, ticker, horizon, model_path=None, scaler_path=None):
+        if model_path and scaler_path:
+            if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+                raise FileNotFoundError(f"Model or scaler not found: {model_path}, {scaler_path}")
+            
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.scaler = joblib.load(scaler_path)
+        elif hasattr(self, 'scaler') and self.scaler is not None:
+            pass
+        elif hasattr(self, 'temp_model_path') and hasattr(self, 'temp_scaler_path') and os.path.exists(self.temp_model_path) and os.path.exists(self.temp_scaler_path):
+            self.model.load_state_dict(torch.load(self.temp_model_path, map_location=self.device))
+            self.scaler = joblib.load(self.temp_scaler_path)
+        else:
+            raise FileNotFoundError("No model path provided and no trained model found. Please train the model first.")
 
-        self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
         self.model.eval()
-        self.scaler = joblib.load(self.scaler_path)
 
-        ticker_data = self.data[self.data['ticker'] == ticker].copy()
+        ticker_data = self.data[self.data['ticker'] == ticker]
+        if len(ticker_data) < self.model.sequence_length:
+            raise ValueError(f"Insufficient data for ticker {ticker}")
+        
         last_sequence_raw = ticker_data[self.feature_cols].values[-self.model.sequence_length:]
         last_sequence_scaled = self.scaler.transform(last_sequence_raw)
 
-        input_seq = torch.FloatTensor(last_sequence_scaled).unsqueeze(0).to(self.device)
-        ticker_id = torch.LongTensor([self.ticker_map[ticker]]).to(self.device)
+        input_seq = torch.from_numpy(last_sequence_scaled).unsqueeze(0).to(self.device, dtype=torch.float32)
+        ticker_id = torch.tensor([self.ticker_map[ticker]], device=self.device, dtype=torch.long)
 
-        predictions = []
+        predictions = torch.empty((horizon, len(self.feature_cols)), device=self.device, dtype=torch.float32)
+        
         with torch.no_grad():
-            for _ in range(horizon):
+            for i in range(horizon):
                 prediction_scaled = self.model(input_seq, ticker_id)
-                
-                next_pred_scaled = prediction_scaled[:, -1, :].unsqueeze(1)
-                predictions.append(next_pred_scaled)
-                
-                input_seq = torch.cat([input_seq[:, 1:, :], next_pred_scaled], dim=1)
+                next_pred_scaled = prediction_scaled[:, -1, :]
+                predictions[i] = next_pred_scaled.squeeze(0)
+                input_seq = torch.cat([input_seq[:, 1:, :], next_pred_scaled.unsqueeze(1)], dim=1)
 
-        predictions_scaled = torch.cat(predictions, dim=1).cpu().numpy()
-        predictions_scaled = predictions_scaled.reshape(horizon, -1)
-        predictions_unscaled = self.scaler.inverse_transform(predictions_scaled)
+        predictions_cpu = predictions.cpu().numpy()
+        predictions_unscaled = self.scaler.inverse_transform(predictions_cpu)
 
         return pd.DataFrame(predictions_unscaled, columns=self.feature_cols)

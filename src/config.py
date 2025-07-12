@@ -1,5 +1,6 @@
 import torch
 from colorama import Fore, Style, init
+import os
 
 init(autoreset=True)
 
@@ -26,7 +27,7 @@ if DEVICE == "mps":
     torch.backends.mps.enable_nested_tensor = False
     torch.mps.set_per_process_memory_fraction(0.8)
 
-START_DATE = "2015-01-01"
+START_DATE = "2011-01-01"
 TICKERS = ["AAPL", "MSFT", "GOOG", "NVDA", "TSLA", "AMZN", "META"]
 
 YFINANCE_FEATURES = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -111,3 +112,31 @@ FEATURE_ENGINEERING = {
     "lag_periods": [1, 2, 3, 5],
     "use_technical_patterns": True,
 }
+
+BACKUP_CONFIG = {
+    "auto_backup": True,
+    "backup_strategy": "smart",
+    "max_backups": 15,
+    "backup_retention_days": 45,
+    "compression_level": 6,
+    "verify_integrity": True,
+    "create_checkpoint_every": 5,
+    "emergency_backup_threshold": 0.1
+}
+
+RECOVERY_CONFIG = {
+    "auto_repair": True,
+    "repair_metadata": True,
+    "backup_before_repair": True,
+    "max_recovery_attempts": 3,
+    "recovery_log_retention_days": 90
+}
+
+def ensure_directories():
+    dirs = [RAW_DATA_CACHE_PATH, MODELS_PATH, SAVED_MODELS_PATH]
+    for dir_path in dirs:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
+            print(f"{Fore.GREEN}Created directory: {dir_path}{Style.RESET_ALL}")
+
+ensure_directories()
