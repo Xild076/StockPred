@@ -15,13 +15,18 @@ def get_device():
         print(f"{Fore.GREEN}Apple Silicon GPU (MPS) detected and available{Style.RESET_ALL}")
         return "mps"
     elif torch.cuda.is_available():
-        print(f"{Fore.GREEN}NVIDIA GPU (CUDA) detected and available{Style.RESET_ALL}") 
+        gpu_count = torch.cuda.device_count()
+        if gpu_count > 1:
+            print(f"{Fore.GREEN}Multiple NVIDIA GPUs detected: {gpu_count} GPUs available{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}NVIDIA GPU (CUDA) detected and available{Style.RESET_ALL}")
         return "cuda"
     else:
         print(f"{Fore.YELLOW}Using CPU - no GPU acceleration available{Style.RESET_ALL}")
         return "cpu"
 
 DEVICE = get_device()
+USE_MULTI_GPU = torch.cuda.device_count() > 1 if DEVICE == "cuda" else False
 
 if DEVICE == "mps":
     torch.backends.mps.enable_nested_tensor = False

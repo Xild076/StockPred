@@ -59,6 +59,14 @@ class UniversalModelEngine:
             sequence_length=current_model_config['sequence_length'],
             prediction_horizon=current_model_config['prediction_horizon']
         ).to(self.device)
+        
+        if config.USE_MULTI_GPU and torch.cuda.device_count() > 1:
+            print(f"Using {torch.cuda.device_count()} GPUs for training")
+            self.model = nn.DataParallel(self.model)
+            self.is_multi_gpu = True
+        else:
+            self.is_multi_gpu = False
+            
         self.temp_model_path = os.path.join(config.MODELS_PATH, 'temp_model.pth')
         self.temp_scaler_path = os.path.join(config.MODELS_PATH, 'temp_scaler.pkl')
         self.checkpoint_path = config.CHECKPOINT_PATH
@@ -137,6 +145,10 @@ class UniversalModelEngine:
         val_size = int(len(X) * config.TRAIN_CONFIG['val_split_ratio'])
         train_size = len(X) - val_size
         
+        batch_size = config.TRAIN_CONFIG['batch_size']
+        if config.USE_MULTI_GPU:
+            batch_size = batch_size * torch.cuda.device_count()
+        
         train_data = TensorDataset(
             torch.from_numpy(X[:train_size]).to(self.device, dtype=torch.float32), 
             torch.from_numpy(y[:train_size]).to(self.device, dtype=torch.float32), 
@@ -150,14 +162,14 @@ class UniversalModelEngine:
         
         self.train_loader = DataLoader(
             train_data, 
-            batch_size=config.TRAIN_CONFIG['batch_size'], 
+            batch_size=batch_size, 
             shuffle=True, 
             pin_memory=False,
             num_workers=0
         )
         self.val_loader = DataLoader(
             val_data, 
-            batch_size=config.TRAIN_CONFIG['batch_size'], 
+            batch_size=batch_size, 
             shuffle=False, 
             pin_memory=False,
             num_workers=0
@@ -170,7 +182,7 @@ class UniversalModelEngine:
             try:
                 state = {
                     'epoch': epoch,
-                    'model_state_dict': self.model.state_dict(),
+                    'model_state_dict': self.model.module.state_dict() if self.is_multi_gpu else self.model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
                     'val_loss': val_loss,
@@ -201,7 +213,10 @@ class UniversalModelEngine:
                 torch.serialization.add_safe_globals([StandardScaler])
                 checkpoint = torch.load(self.checkpoint_path, map_location=self.device, weights_only=False)
                 
-                self.model.load_state_dict(checkpoint['model_state_dict'])
+                if self.is_multi_gpu:
+                    self.model.module.load_state_dict(checkpoint['model_state_dict'])
+                else:
+                    self.model.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 
                 if scheduler and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict']:
@@ -331,7 +346,8 @@ class UniversalModelEngine:
             if is_best:
                 best_val_loss = avg_val_loss
                 patience_counter = 0
-                torch.save(self.model.state_dict(), self.temp_model_path)
+                model_state = self.model.module.state_dict() if self.is_multi_gpu else self.model.state_dict()
+                torch.save(model_state, self.temp_model_path)
                 joblib.dump(self.scaler, self.temp_scaler_path)
                 print(f"New best model saved! Val Loss: {avg_val_loss:.6f}")
             else:
@@ -400,12 +416,20 @@ class UniversalModelEngine:
             if not os.path.exists(model_path) or not os.path.exists(scaler_path):
                 raise FileNotFoundError(f"Model or scaler not found: {model_path}, {scaler_path}")
             
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            state_dict = torch.load(model_path, map_location=self.device)
+            if self.is_multi_gpu:
+                self.model.module.load_state_dict(state_dict)
+            else:
+                self.model.load_state_dict(state_dict)
             self.scaler = joblib.load(scaler_path)
         elif hasattr(self, 'scaler') and self.scaler is not None:
             pass
         elif hasattr(self, 'temp_model_path') and hasattr(self, 'temp_scaler_path') and os.path.exists(self.temp_model_path) and os.path.exists(self.temp_scaler_path):
-            self.model.load_state_dict(torch.load(self.temp_model_path, map_location=self.device))
+            state_dict = torch.load(self.temp_model_path, map_location=self.device)
+            if self.is_multi_gpu:
+                self.model.module.load_state_dict(state_dict)
+            else:
+                self.model.load_state_dict(state_dict)
             self.scaler = joblib.load(self.temp_scaler_path)
         else:
             raise FileNotFoundError("No model path provided and no trained model found. Please train the model first.")
@@ -426,7 +450,10 @@ class UniversalModelEngine:
         
         with torch.no_grad():
             for i in range(horizon):
-                prediction_scaled = self.model(input_seq, ticker_id)
+                if self.is_multi_gpu:
+                    prediction_scaled = self.model.module(input_seq, ticker_id)
+                else:
+                    prediction_scaled = self.model(input_seq, ticker_id)
                 next_pred_scaled = prediction_scaled[:, -1, :]
                 predictions[i] = next_pred_scaled.squeeze(0)
                 input_seq = torch.cat([input_seq[:, 1:, :], next_pred_scaled.unsqueeze(1)], dim=1)
