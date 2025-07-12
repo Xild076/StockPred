@@ -81,7 +81,7 @@ TRAIN_CONFIG = {
     "max_lr": 0.0003,
     "weight_decay": 1e-4,
     "batch_size": 96,
-    "epochs": 500,
+    "epochs": 1000,
     "val_split_ratio": 0.2,
     "lr_scheduler_patience": 5,
     "lr_scheduler_factor": 0.1,
