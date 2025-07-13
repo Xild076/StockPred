@@ -23,17 +23,20 @@ except (ImportError, ValueError):
     from src.model_manager import ModelManager
 
 class DirectionalMSELoss(nn.Module):
-    def __init__(self, alpha=0.7, direction_weight=2.0):
+    def __init__(self, alpha=0.8, direction_weight=3.0, magnitude_threshold=0.001):
         super().__init__()
         self.alpha = alpha
         self.direction_weight = direction_weight
+        self.magnitude_threshold = magnitude_threshold
 
     def forward(self, y_pred, y_true):
         mse_loss = F.mse_loss(y_pred, y_true)
         
         pred_sign = torch.sign(y_pred)
         true_sign = torch.sign(y_true)
-        direction_loss = torch.mean((pred_sign - true_sign) ** 2)
+        
+        significant_moves = torch.abs(y_true) > self.magnitude_threshold
+        direction_loss = torch.mean((pred_sign - true_sign) ** 2 * significant_moves.float())
         
         diff = y_pred - y_true
         pos_diff = F.relu(diff)
@@ -41,7 +44,9 @@ class DirectionalMSELoss(nn.Module):
         
         asymmetric_loss = torch.mean(pos_diff ** 2 * self.alpha + neg_diff ** 2 * (1 - self.alpha))
         
-        return mse_loss + self.direction_weight * direction_loss + 0.5 * asymmetric_loss
+        magnitude_penalty = torch.mean(torch.abs(y_pred - y_true) * significant_moves.float())
+        
+        return mse_loss + self.direction_weight * direction_loss + 0.3 * asymmetric_loss + 0.5 * magnitude_penalty
 
 class UniversalModelEngine:
     def __init__(self, data, model_config=None):
@@ -67,9 +72,10 @@ class UniversalModelEngine:
             prediction_horizon=current_model_config['prediction_horizon']
         ).to(self.device)
         
+        # Multi-GPU setup
         if config.USE_MULTI_GPU and torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs for training")
-            self.model = nn.DataParallel(self.model)
+            self.model = torch.nn.DataParallel(self.model)
             self.is_multi_gpu = True
         else:
             self.is_multi_gpu = False
@@ -256,7 +262,7 @@ class UniversalModelEngine:
         print("Starting training...")
         self.prepare_data()
         
-        criterion = DirectionalMSELoss(alpha=0.7, direction_weight=2.0)
+        criterion = DirectionalMSELoss(alpha=0.8, direction_weight=3.0, magnitude_threshold=0.001)
         optimizer = torch.optim.Adam(
             self.model.parameters(), 
             lr=config.TRAIN_CONFIG['learning_rate'],
