@@ -22,19 +22,26 @@ except (ImportError, ValueError):
     from src.modeling.architecture import UniversalTransformerModel
     from src.model_manager import ModelManager
 
-class AsymmetricMSELoss(nn.Module):
-    def __init__(self, alpha=0.6):
+class DirectionalMSELoss(nn.Module):
+    def __init__(self, alpha=0.7, direction_weight=2.0):
         super().__init__()
         self.alpha = alpha
+        self.direction_weight = direction_weight
 
     def forward(self, y_pred, y_true):
+        mse_loss = F.mse_loss(y_pred, y_true)
+        
+        pred_sign = torch.sign(y_pred)
+        true_sign = torch.sign(y_true)
+        direction_loss = torch.mean((pred_sign - true_sign) ** 2)
+        
         diff = y_pred - y_true
         pos_diff = F.relu(diff)
         neg_diff = F.relu(-diff)
         
-        loss = torch.mean(torch.log(torch.cosh(pos_diff)) * self.alpha + 
-                         torch.log(torch.cosh(neg_diff)) * (1 - self.alpha))
-        return loss
+        asymmetric_loss = torch.mean(pos_diff ** 2 * self.alpha + neg_diff ** 2 * (1 - self.alpha))
+        
+        return mse_loss + self.direction_weight * direction_loss + 0.5 * asymmetric_loss
 
 class UniversalModelEngine:
     def __init__(self, data, model_config=None):
@@ -249,7 +256,7 @@ class UniversalModelEngine:
         print("Starting training...")
         self.prepare_data()
         
-        criterion = AsymmetricMSELoss(alpha=0.6)
+        criterion = DirectionalMSELoss(alpha=0.7, direction_weight=2.0)
         optimizer = torch.optim.Adam(
             self.model.parameters(), 
             lr=config.TRAIN_CONFIG['learning_rate'],

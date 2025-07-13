@@ -61,33 +61,33 @@ TECHNICAL_INDICATORS = [
 ]
 
 MODEL_CONFIG = {
-    "d_model": 384,
-    "n_heads": 24,
-    "n_layers": 8,
-    "dropout": 0.2,
+    "d_model": 256,
+    "n_heads": 16,
+    "n_layers": 12,
+    "dropout": 0.3,
     "sequence_length": 60,
     "prediction_horizon": 5,
-    "ticker_embedding_dim": 48,
+    "ticker_embedding_dim": 32,
     "use_layer_norm": True,
     "use_residual_connections": True,
     "activation": "gelu",
-    "attention_dropout": 0.15,
-    "ffn_dropout": 0.2,
-    "ffn_dim": 768
+    "attention_dropout": 0.2,
+    "ffn_dropout": 0.3,
+    "ffn_dim": 1024
 }
 
 TRAIN_CONFIG = {
-    "learning_rate": 0.00005,
-    "max_lr": 0.0003,
-    "weight_decay": 1e-4,
-    "batch_size": 96,
+    "learning_rate": 0.0001,
+    "max_lr": 0.0005,
+    "weight_decay": 5e-05,
+    "batch_size": 128,
     "epochs": 1000,
     "val_split_ratio": 0.2,
     "lr_scheduler_patience": 5,
     "lr_scheduler_factor": 0.1,
-    "warmup_epochs": 40,
-    "gradient_clip_val": 0.5,
-    "early_stopping_patience": 80,
+    "warmup_epochs": 30,
+    "gradient_clip_val": 0.2,
+    "early_stopping_patience": 100,
     "mixed_precision": True,
     "accumulate_grad_batches": 2,
     "dataloader_num_workers": 4,
