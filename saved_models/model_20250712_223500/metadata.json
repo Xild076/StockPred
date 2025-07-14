@@ -1,10 +1,12 @@
 {
-  "created_at": "2025-07-06T13:00:17.372776",
+  "created_at": "2025-07-12T22:35:00.821175",
   "model_type": "UniversalTransformerModel",
-  "best_val_loss": 0.0793485056076731,
+  "model_architecture": "UniversalTransformerModel",
+  "best_val_loss": 0.19703268775573143,
+  "final_val_loss": 0.19703268775573143,
   "epochs_trained": 500,
-  "training_time": "44053.75s",
-  "device": "mps",
+  "training_time": "11359.61s",
+  "device": "cuda",
   "model_config": {
     "d_model": 256,
     "n_heads": 16,
@@ -73,15 +75,8 @@
     "unemployment",
     "vix"
   ],
-  "accuracy_metrics": {
-    "mae": 2.6762505778102637,
-    "rmse": 140.01299838210238,
-    "r2": -1.8325550831664974,
-    "mape": 242.4762751628685,
-    "direction_accuracy": 0.8720381807973049
-  },
-  "version": "1.0",
   "target_feature": "log_return_Close",
-  "model_architecture": "UniversalTransformerModel",
-  "data_path": "data/universal_stock_data.parquet"
+  "accuracy_metrics": {},
+  "data_path": "data/universal_stock_data.parquet",
+  "version": "1.0"
 }

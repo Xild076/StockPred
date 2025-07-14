@@ -1,5 +1,6 @@
 import torch
 from colorama import Fore, Style, init
+import os
 
 init(autoreset=True)
 
@@ -14,19 +15,24 @@ def get_device():
         print(f"{Fore.GREEN}Apple Silicon GPU (MPS) detected and available{Style.RESET_ALL}")
         return "mps"
     elif torch.cuda.is_available():
-        print(f"{Fore.GREEN}NVIDIA GPU (CUDA) detected and available{Style.RESET_ALL}") 
+        gpu_count = torch.cuda.device_count()
+        if gpu_count > 1:
+            print(f"{Fore.GREEN}Multiple NVIDIA GPUs detected: {gpu_count} GPUs available{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}NVIDIA GPU (CUDA) detected and available{Style.RESET_ALL}")
         return "cuda"
     else:
         print(f"{Fore.YELLOW}Using CPU - no GPU acceleration available{Style.RESET_ALL}")
         return "cpu"
 
 DEVICE = get_device()
+USE_MULTI_GPU = torch.cuda.device_count() > 1 if DEVICE == "cuda" else False
 
 if DEVICE == "mps":
     torch.backends.mps.enable_nested_tensor = False
     torch.mps.set_per_process_memory_fraction(0.8)
 
-START_DATE = "2015-01-01"
+START_DATE = "2011-01-01"
 TICKERS = ["AAPL", "MSFT", "GOOG", "NVDA", "TSLA", "AMZN", "META"]
 
 YFINANCE_FEATURES = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -55,35 +61,35 @@ TECHNICAL_INDICATORS = [
 ]
 
 MODEL_CONFIG = {
-    "d_model": 256,
-    "n_heads": 16,
-    "n_layers": 12,
-    "dropout": 0.3,
+    "d_model": 384,
+    "n_heads": 24,
+    "n_layers": 16,
+    "dropout": 0.25,
     "sequence_length": 60,
     "prediction_horizon": 5,
-    "ticker_embedding_dim": 32,
+    "ticker_embedding_dim": 48,
     "use_layer_norm": True,
     "use_residual_connections": True,
     "activation": "gelu",
-    "attention_dropout": 0.2,
-    "ffn_dropout": 0.3,
-    "ffn_dim": 1024
+    "attention_dropout": 0.15,
+    "ffn_dropout": 0.25,
+    "ffn_dim": 1536
 }
 
 TRAIN_CONFIG = {
-    "learning_rate": 0.0001,
-    "max_lr": 0.0005,
-    "weight_decay": 5e-5,
-    "batch_size": 128,
-    "epochs": 500,
+    "learning_rate": 0.00008,
+    "max_lr": 0.0002,
+    "weight_decay": 8e-06,
+    "batch_size": 64,
+    "epochs": 800,
     "val_split_ratio": 0.2,
-    "lr_scheduler_patience": 5,
-    "lr_scheduler_factor": 0.1,
-    "warmup_epochs": 30,
-    "gradient_clip_val": 0.2,
-    "early_stopping_patience": 50,
+    "lr_scheduler_patience": 10,
+    "lr_scheduler_factor": 0.6,
+    "warmup_epochs": 50,
+    "gradient_clip_val": 0.8,
+    "early_stopping_patience": 250,
     "mixed_precision": True,
-    "accumulate_grad_batches": 2,
+    "accumulate_grad_batches": 4,
     "dataloader_num_workers": 4,
     "pin_memory": True,
     "target_val_loss": 0.0005,
@@ -111,3 +117,31 @@ FEATURE_ENGINEERING = {
     "lag_periods": [1, 2, 3, 5],
     "use_technical_patterns": True,
 }
+
+BACKUP_CONFIG = {
+    "auto_backup": True,
+    "backup_strategy": "smart",
+    "max_backups": 15,
+    "backup_retention_days": 45,
+    "compression_level": 6,
+    "verify_integrity": True,
+    "create_checkpoint_every": 5,
+    "emergency_backup_threshold": 0.1
+}
+
+RECOVERY_CONFIG = {
+    "auto_repair": True,
+    "repair_metadata": True,
+    "backup_before_repair": True,
+    "max_recovery_attempts": 3,
+    "recovery_log_retention_days": 90
+}
+
+def ensure_directories():
+    dirs = [RAW_DATA_CACHE_PATH, MODELS_PATH, SAVED_MODELS_PATH]
+    for dir_path in dirs:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
+            print(f"{Fore.GREEN}Created directory: {dir_path}{Style.RESET_ALL}")
+
+ensure_directories()
