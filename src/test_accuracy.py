@@ -55,7 +55,6 @@ class AccuracyTester:
         if not os.path.exists(model_path) or not os.path.exists(scaler_path):
             raise FileNotFoundError(f"Model or scaler not found in {self.model_dir}")
 
-        # Filter model config to only include supported parameters
         supported_params = {
             'd_model', 'n_heads', 'n_layers', 'dropout', 'ticker_embedding_dim',
             'sequence_length', 'prediction_horizon'
@@ -135,9 +134,17 @@ class AccuracyTester:
 
         mape = np.mean(np.abs((true_returns_actual - pred_returns_actual) / (true_returns_actual + 1e-8))) * 100
 
+        sample_mae = np.median([mean_absolute_error(true_returns_actual[i], pred_returns_actual[i]) for i in range(true_returns_actual.shape[0])])
+        sample_rmse = np.median([np.sqrt(mean_squared_error(true_returns_actual[i], pred_returns_actual[i])) for i in range(true_returns_actual.shape[0])])
+        sample_r2 = np.median([r2_score(true_returns_actual[i], pred_returns_actual[i]) for i in range(true_returns_actual.shape[0])])
+        sample_direction_accuracy = np.median([np.mean(np.sign(true_returns_actual[i]) == np.sign(pred_returns_actual[i])) for i in range(true_returns_actual.shape[0])])
+        sample_mape = np.median([np.mean(np.abs((true_returns_actual[i] - pred_returns_actual[i]) / (true_returns_actual[i] + 1e-8))) * 100 for i in range(true_returns_actual.shape[0])])
+
         return {
             'MAE': mae, 'MSE': mse, 'RMSE': rmse, 'R²': r2,
-            'Direction_Accuracy': direction_accuracy, 'MAPE': mape
+            'Direction_Accuracy': direction_accuracy, 'MAPE': mape,
+            'Median_MAE': sample_mae, 'Median_RMSE': sample_rmse, 'Median_R²': sample_r2,
+            'Median_Direction_Accuracy': sample_direction_accuracy, 'Median_MAPE': sample_mape
         }
 
     def run_comprehensive_test(self):
@@ -245,4 +252,62 @@ class AccuracyTester:
             plt.close()
         else:
             plt.show()
+
+def main():
+    try:
+        print("Starting comprehensive model accuracy testing...")
+        
+        tester = AccuracyTester()
+        results = tester.run_comprehensive_test()
+        
+        overall_metrics = results['overall_metrics']
+        ticker_metrics = results['ticker_metrics']
+        
+        print(f"\nOverall Model Performance:")
+        print(f"MAE: {overall_metrics['MAE']:.4f}")
+        print(f"RMSE: {overall_metrics['RMSE']:.4f}")
+        print(f"R²: {overall_metrics['R²']:.4f}")
+        print(f"Direction Accuracy: {overall_metrics['Direction_Accuracy']:.2%}")
+        print(f"MAPE: {overall_metrics['MAPE']:.2f}%")
+        
+        print(f"\nTicker-Specific Performance:")
+        for ticker, metrics in ticker_metrics.items():
+            print(f"{ticker}: R²={metrics['R²']:.3f}, Dir={metrics['Direction_Accuracy']:.2%}")
+        
+        output_dir = os.path.join(tester.model_dir, 'analysis')
+        os.makedirs(output_dir, exist_ok=True)
+        
+        main_plot, dist_plot = tester.save_prediction_plots(results, os.path.join(output_dir, 'analysis.png'))
+        
+        accuracy_metrics = {
+            'mae': float(overall_metrics['MAE']),
+            'rmse': float(overall_metrics['RMSE']),
+            'r2': float(overall_metrics['R²']),
+            'direction_accuracy': float(overall_metrics['Direction_Accuracy']),
+            'mape': float(overall_metrics['MAPE']),
+            'median_mae': float(overall_metrics['Median_MAE']),
+            'median_rmse': float(overall_metrics['Median_RMSE']),
+            'median_r2': float(overall_metrics['Median_R²']),
+            'median_direction_accuracy': float(overall_metrics['Median_Direction_Accuracy']),
+            'median_mape': float(overall_metrics['Median_MAPE'])
+        }
+
+        metrics_file = os.path.join(output_dir, 'accuracy_metrics.json')
+        with open(metrics_file, 'w') as f:
+            json.dump(accuracy_metrics, f, indent=2)
+        
+        print(f"\nAnalysis saved to: {output_dir}")
+        print(f"Plots: {main_plot}, {dist_plot}")
+        print(f"Metrics: {metrics_file}")
+        
+        return [main_plot, dist_plot, metrics_file], {'accuracy_metrics': accuracy_metrics}
+        
+    except Exception as e:
+        print(f"Error during testing: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
+
+if __name__ == "__main__":
+    main()
 

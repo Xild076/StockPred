@@ -78,5 +78,9 @@
     "r2": -4.719338444804394,
     "mape": 379.35420996688384,
     "direction_accuracy": 0.7217015803013598
-  }
+  },
+  "version": "1.0",
+  "target_feature": "log_return_Close",
+  "model_architecture": "UniversalTransformerModel",
+  "data_path": "data/universal_stock_data.parquet"
 }

@@ -14,7 +14,7 @@ Ticker Embedding -> Input Projection -> Positional Embedding -> Transformer Enco
 - yfinance for finance data
 - FRED for interest rate, GDP, inflation, unemployment, and volitility
 ### Efficiency
-The model is only has about 2M parameters, making it very efficient and runnable on low-end GPUs and high-end CPUs. This makes it one of the most accessible stock prediction models out there, especially given its accuracy.
+The model is only has about 10M parameters, making it very efficient and runnable on low-end GPUs and high-end CPUs. This makes it one of the most accessible stock prediction models out there, especially given its accuracy.
 ### Accuracy
 The latest trained model, 2025-07-06T13:00:17.372776, when tested over 3562 samples, returned:
 - A directional accuracy of 87.20%
