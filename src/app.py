@@ -106,8 +106,8 @@ if engine:
     ticker = st.selectbox("Select a Ticker", tickers_loaded)
     
     if ticker:
-        horizon = st.slider("Select Prediction Horizon (days)", 1, 30, model_config_loaded['prediction_horizon'])
-
+        max_horizon = model_config_loaded.get('prediction_horizon', 5)
+        horizon = st.slider("Select Prediction Horizon (days)", 1, 120, max_horizon)
         if st.button("Generate Forecast"):
             try:
                 with st.spinner("Generating forecast..."):
